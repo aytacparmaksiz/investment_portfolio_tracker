@@ -4,38 +4,13 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
 const ASSET_TYPES = [
-  {
-    value: 'hisse',
-    label: '🇹🇷 BIST Hisse',
-    hasSymbol: true,
-    symbolPlaceholder: 'THYAO, GARAN...',
-  },
-  {
-    value: 'usd_hisse',
-    label: '🇺🇸 ABD Hisse',
-    hasSymbol: true,
-    symbolPlaceholder: 'AAPL, TSLA...',
-  },
-  {
-    value: 'kripto',
-    label: '₿ Kripto',
-    hasSymbol: true,
-    symbolPlaceholder: 'BTC, ETH...',
-  },
-  {
-    value: 'etf',
-    label: '📈 ETF',
-    hasSymbol: true,
-    symbolPlaceholder: 'SPY, QQQ...',
-  },
-  {
-    value: 'doviz',
-    label: '💱 Döviz/Altın',
-    hasSymbol: true,
-    symbolPlaceholder: 'USD, EUR, XAU...',
-  },
-  { value: 'bes', label: '🏦 BES', hasSymbol: false },
-  { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false },
+  { value: 'hisse', label: '🇹🇷 BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
+  { value: 'usd_hisse', label: '🇺🇸 ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
+  { value: 'kripto', label: '₿ Kripto', hasSymbol: true, symbolPlaceholder: 'BTC, ETH...', currency: 'USD' },
+  { value: 'etf', label: '📈 ETF', hasSymbol: true, symbolPlaceholder: 'SPY, QQQ...', currency: 'USD' },
+  { value: 'doviz', label: '💱 Döviz/Altın', hasSymbol: true, symbolPlaceholder: 'USD, EUR, XAU...', currency: 'TRY' },
+  { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
+  { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
 ];
 
 const Assets = () => {
@@ -393,7 +368,7 @@ const Assets = () => {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  Ort. Maliyet (₺)
+                  Ort. Maliyet ({selectedType?.currency === 'USD' ? '$' : '₺'})
                 </label>
                 <input
                   type="number"

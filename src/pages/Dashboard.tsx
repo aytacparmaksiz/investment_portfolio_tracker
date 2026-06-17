@@ -20,6 +20,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true)
   const [pricesLoading, setPricesLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
+  const [usdRate, setUsdRate] = useState<number>(38)
 
   useEffect(() => { fetchAssets() }, [])
 
@@ -67,6 +69,8 @@ const Dashboard = () => {
         }, 0)
         await saveSnapshot(portfolios[0].id, tv, tc)
       }
+      if (fetched['USDTRY=X']) setUsdRate(fetched['USDTRY=X'])
+      else if (fetched['USD']) setUsdRate(fetched['USD'])
       setPricesLoading(false)
     }
   }
@@ -103,9 +107,13 @@ const Dashboard = () => {
   const totalGain = total - totalCost
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
 
-  const fc = (val: number) =>
-    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
-  const fp = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
+  const fc = (val: number) => {
+    if (displayCurrency === 'USD') {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val / usdRate)
+    }
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
+  }
+    const fp = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -137,9 +145,25 @@ const Dashboard = () => {
           <h1 style={{ fontSize: '20px', fontWeight: '700' }}>💼 Kumbaram</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{user.email}</p>
         </div>
-        <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-          Çıkış
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-primary)', borderRadius: '8px', padding: '2px', border: '1px solid var(--border)' }}>
+            <button
+              onClick={() => setDisplayCurrency('TRY')}
+              style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)' }}
+            >
+              ₺
+            </button>
+            <button
+              onClick={() => setDisplayCurrency('USD')}
+              style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)' }}
+            >
+              $
+            </button>
+          </div>
+          <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Çıkış
+          </button>
+        </div>
       </div>
 
       {/* 4 Metrik Kart */}
@@ -239,7 +263,11 @@ const Dashboard = () => {
                         <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
                           {asset.symbol || ''}
                           {!isManual && asset.quantity ? ` • ${asset.quantity} adet` : ''}
-                          {hasPrice ? ` • ${fc(prices[asset.symbol])}` : ''}
+                          {hasPrice ? ` • ${
+                            ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
+                              ? `$${(prices[asset.symbol] / usdRate).toFixed(2)}`
+                              : fc(prices[asset.symbol])
+                          }` : ''}
                         </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
