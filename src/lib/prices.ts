@@ -67,21 +67,21 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
 
     } else if (asset.type === 'doviz') {
       const dovizMap: Record<string, string> = {
-        USD: 'USDTRY=X',
-        EUR: 'EURTRY=X',
-        GBP: 'GBPTRY=X',
-        XAU: 'GC=F',
-        ALTIN: 'GC=F',
-        TRYG: 'GC=F',
+        USD: 'USDTRY=X', EUR: 'EURTRY=X', GBP: 'GBPTRY=X', CHF: 'CHFTRY=X'
       }
       const yahooSym = dovizMap[sym] || `${sym}TRY=X`
       const price = await fetchPrice(yahooSym)
+      if (price) prices[sym] = price
 
-      if (sym === 'TRYG' && price) {
-        // Gram altın: ons fiyatı (USD) / 31.1035 * usdtry
-        prices[sym] = (price / 31.1035) * usdtry
-      } else if (price) {
-        prices[sym] = price
+    } else if (asset.type === 'altin') {
+      if (sym === 'TRYG') {
+        // Gram altın: ons fiyatı / 31.1035 * usdtry
+        const xauPrice = await fetchPrice('GC=F')
+        if (xauPrice) prices[sym] = (xauPrice / 31.1035) * usdtry
+      } else {
+        // Ons altın veya diğer
+        const price = await fetchPrice('GC=F')
+        if (price) prices[sym] = price * usdtry
       }
     }
   }))

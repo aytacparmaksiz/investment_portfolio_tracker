@@ -5,18 +5,19 @@ import { addTransaction, fetchTransactions } from '../lib/transactions'
 import { useNavigate } from 'react-router-dom'
 
 const ASSET_TYPES = [
-  { value: 'hisse', label: '🇹🇷 BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
-  { value: 'usd_hisse', label: '🇺🇸 ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
+  { value: 'hisse', label: 'BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
+  { value: 'usd_hisse', label: 'ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
   { value: 'kripto', label: '₿ Kripto', hasSymbol: true, symbolPlaceholder: 'BTC, ETH...', currency: 'USD' },
   { value: 'etf', label: '📈 ETF', hasSymbol: true, symbolPlaceholder: 'SPY, QQQ...', currency: 'USD' },
-  { value: 'doviz', label: '💱 Döviz/Altın', hasSymbol: true, symbolPlaceholder: 'USD, EUR, XAU...', currency: 'TRY' },
+  { value: 'doviz', label: '💱 Döviz', hasSymbol: true, symbolPlaceholder: 'USD, EUR, GBP...', currency: 'TRY' },
+  { value: 'altin', label: '🥇 Altın', hasSymbol: true, symbolPlaceholder: 'TRYG (gram), XAU (ons)...', currency: 'TRY' },
   { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
   { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
 ]
 
 const ASSET_LABELS: Record<string, string> = {
-  hisse: '🇹🇷 BIST', usd_hisse: '🇺🇸 ABD', kripto: '₿ Kripto',
-  etf: '📈 ETF', doviz: '💱 Döviz', bes: '🏦 BES', vadeli: '💰 Vadeli'
+  hisse: '🇹BIST', usd_hisse: 'ABD', kripto: '₿ Kripto',
+  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', bes: '🏦 BES', vadeli: '💰 Vadeli'
 }
 
 const Assets = () => {
@@ -31,7 +32,8 @@ const Assets = () => {
   const [success, setSuccess] = useState('')
 
   const [form, setForm] = useState({
-    type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: ''
+    type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
+    interest_rate: '', maturity_days: ''
   })
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
@@ -40,6 +42,8 @@ const Assets = () => {
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
   const [txError, setTxError] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -61,7 +65,17 @@ const Assets = () => {
 
   const selectedType = ASSET_TYPES.find(t => t.value === form.type)
   const isManual = ['bes', 'vadeli'].includes(form.type)
+  const isVadeli = form.type === 'vadeli'
 
+  const handleSymbolSearch = async (value: string) => {
+    setForm({ ...form, symbol: value })
+    if (value.length < 2) { setSearchResults([]); return }
+    setSearching(true)
+    const { searchTicker } = await import('../lib/search')
+    const results = await searchTicker(value)
+    setSearchResults(results.slice(0, 5))
+    setSearching(false)
+  }
   const handleSave = async () => {
     setError('')
     if (!form.name) return setError('Varlık adı zorunludur.')
@@ -85,6 +99,16 @@ const Assets = () => {
 
     if (isManual) {
       await supabase.from('manual_values').insert({ asset_id: asset.id, value: Number(form.manual_value) })
+
+      if (isVadeli && form.interest_rate && form.maturity_days) {
+        const maturityDate = new Date()
+        maturityDate.setDate(maturityDate.getDate() + Number(form.maturity_days))
+        await supabase.from('assets').update({
+          principal: Number(form.manual_value),
+          interest_rate: Number(form.interest_rate),
+          maturity_date: maturityDate.toISOString().split('T')[0]
+        }).eq('id', asset.id)
+      }
     } else if (form.quantity && form.avg_cost) {
       await addTransaction(asset.id, 'buy', Number(form.quantity), Number(form.avg_cost), new Date().toISOString().split('T')[0])
     }
@@ -302,16 +326,53 @@ const Assets = () => {
           </div>
 
           {selectedType?.hasSymbol && (
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px', position: 'relative' }}>
               <label style={labelStyle}>Sembol</label>
-              <input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value })} placeholder={selectedType.symbolPlaceholder} style={inputStyle} />
+              <input
+                value={form.symbol}
+                onChange={e => handleSymbolSearch(e.target.value)}
+                placeholder={selectedType.symbolPlaceholder}
+                style={inputStyle}
+              />
+              {searching && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>Aranıyor...</p>}
+              {searchResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
+                  {searchResults.map((r: any) => (
+                    <div key={r.symbol}
+                      onClick={() => {
+                        setForm({ ...form, symbol: r.symbol, name: r.name })
+                        setSearchResults([])
+                      }}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                    >
+                      <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{r.symbol}</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{r.name} · {r.exchange}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-
           {isManual ? (
-            <div style={{ marginBottom: '12px' }}>
-              <label style={labelStyle}>Güncel Değer (₺)</label>
-              <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="150000" style={inputStyle} />
+            <div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>Anapara (₺)</label>
+                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
+              </div>
+              {isVadeli && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Yıllık Faiz (%)</label>
+                    <input type="number" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Vade (Gün)</label>
+                    <input type="number" value={form.maturity_days} onChange={e => setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} />
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>

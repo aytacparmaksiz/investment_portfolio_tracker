@@ -59,3 +59,13 @@ input, select {
 }
 
 .animate-in { animation: fadeIn 0.3s ease forwards; }
+
+/* Button hover efektleri */
+button:hover {
+  opacity: 0.85;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}

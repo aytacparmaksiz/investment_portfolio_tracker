@@ -278,7 +278,7 @@ const Analytics = () => {
                         { label: '📈 S&P 500 alsaydın', value: comparison.sp500, color: '#2563eb' },
                         { label: '🇹🇷 BIST 100 alsaydın', value: comparison.bist, color: '#dc2626' },
                         { label: '🥇 Altın alsaydın', value: comparison.gold, color: '#d97706' },
-                        { label: '📊 Enflasyon takip etseydin', value: comparison.inflation, color: '#6b7280' },
+                        { label: '📊 Enflasyona göre olması gereken', value: comparison.inflation, color: '#6b7280' },
                       ].map((item, i) => {
                         if (!item.value) return null
                         const gain = item.value - totalCost
