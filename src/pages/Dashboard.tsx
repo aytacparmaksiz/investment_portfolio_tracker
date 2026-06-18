@@ -28,6 +28,7 @@ const Dashboard = () => {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
   const [dailyChange, setDailyChange] = useState<number | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
 
   useEffect(() => { fetchAssets() }, [])
 
@@ -274,7 +275,9 @@ const Dashboard = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <ResponsiveContainer width={140} height={140}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="value" nameKey="name" paddingAngle={2}>
+              <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="value" nameKey="name" paddingAngle={2}
+                onClick={(data: any) => setSelectedGroup(selectedGroup === data.type ? null : data.type)}
+                style={{ cursor: 'pointer' }}>
                   {pieData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
@@ -282,7 +285,9 @@ const Dashboard = () => {
             </ResponsiveContainer>
             <div style={{ flex: 1 }}>
               {pieData.map((item: any, i: number) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div key={i}
+                  onClick={() => setSelectedGroup(selectedGroup === item.type ? null : item.type)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', background: selectedGroup === item.type ? 'var(--bg-elevated)' : 'none', transition: 'background 0.15s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: COLORS[i % COLORS.length] }} />
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.label}</span>
