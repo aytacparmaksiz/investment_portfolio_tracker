@@ -23,12 +23,30 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
   const [usdRate, setUsdRate] = useState<number>(38)
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteStatus, setInviteStatus] = useState('')
+  const [portfolioId, setPortfolioId] = useState<string | null>(null)
 
   useEffect(() => { fetchAssets() }, [])
 
   const fetchAssets = async () => {
     const { data: portfolios } = await supabase
       .from('portfolios').select('id').eq('user_id', user.id)
+      if (portfolios?.length) setPortfolioId(portfolios[0].id)
+
+  const handleInvite = async () => {
+    if (!inviteEmail || !portfolioId) return
+    setInviteStatus('loading')
+    const { data, error } = await supabase.rpc('invite_member', {
+      p_portfolio_id: portfolioId,
+      p_email: inviteEmail
+    })
+    if (error) { setInviteStatus('error'); return }
+    if (data === 'user_not_found') setInviteStatus('not_found')
+    else if (data === 'already_member') setInviteStatus('already')
+    else setInviteStatus('success')
+  }
 
     if (!portfolios?.length) {
       await supabase.from('portfolios').insert({ user_id: user.id, name: 'Ana Portföy' })
@@ -295,6 +313,38 @@ const Dashboard = () => {
         style={{ width: '100%', padding: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '16px', opacity: pricesLoading ? 0.6 : 1 }}>
         {pricesLoading ? 'Güncelleniyor...' : '🔄 Fiyatları Yenile'}
       </button>
+
+      {/* Davet */}
+      <div style={{ ...cardStyle, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={{ fontWeight: '600', fontSize: '14px' }}>👥 Portföyü Paylaş</p>
+          <button onClick={() => setShowInvite(!showInvite)}
+            style={{ background: 'none', color: 'var(--accent)', fontSize: '13px' }}>
+            {showInvite ? 'Kapat' : 'Davet Et'}
+          </button>
+        </div>
+        {showInvite && (
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="esim@email.com"
+                style={{ flex: 1, padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
+              />
+              <button onClick={handleInvite}
+                style={{ padding: '10px 16px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '600', fontSize: '14px' }}>
+                Gönder
+              </button>
+            </div>
+            {inviteStatus === 'success' && <p style={{ color: 'var(--green)', fontSize: '13px', marginTop: '8px' }}>✅ Davet gönderildi!</p>}
+            {inviteStatus === 'not_found' && <p style={{ color: 'var(--red)', fontSize: '13px', marginTop: '8px' }}>❌ Bu email ile kayıtlı kullanıcı bulunamadı. Önce kayıt olması gerekiyor.</p>}
+            {inviteStatus === 'already' && <p style={{ color: 'var(--yellow)', fontSize: '13px', marginTop: '8px' }}>⚠️ Bu kullanıcı zaten portföy üyesi.</p>}
+            {inviteStatus === 'error' && <p style={{ color: 'var(--red)', fontSize: '13px', marginTop: '8px' }}>❌ Bir hata oluştu.</p>}
+          </div>
+        )}
+      </div>
 
       {/* Alt Navigasyon */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '12px 0' }}>
