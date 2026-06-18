@@ -27,6 +27,7 @@ const Dashboard = () => {
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
+  const [dailyChange, setDailyChange] = useState<number | null>(null)
 
   useEffect(() => { fetchAssets() }, [])
 
@@ -86,6 +87,31 @@ const Dashboard = () => {
           return sum + (a.avg_cost || 0) * Number(a.quantity)
         }, 0)
         await saveSnapshot(portfolios[0].id, tv, tc)
+      }
+      // Günlük değişim hesapla
+      if (portfolios?.[0]?.id) {
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        const yStr = yesterday.toISOString().split('T')[0]
+
+        const { data: ySnap } = await supabase
+          .from('portfolio_snapshots')
+          .select('total_value')
+          .eq('portfolio_id', portfolios[0].id)
+          .eq('snapshot_date', yStr)
+          .single()
+
+        if (ySnap) {
+          const todayVal = loaded.reduce((sum: number, a: any) => {
+            if (['bes', 'vadeli'].includes(a.type)) {
+              const vals = a.manual_values || []
+              return sum + Number(vals[vals.length - 1]?.value || 0)
+            }
+            const p = fetched[a.symbol] ?? a.avg_cost ?? 0
+            return sum + p * Number(a.quantity)
+          }, 0)
+          setDailyChange(todayVal - Number(ySnap.total_value))
+        }
       }
       setPricesLoading(false)
     }
@@ -203,7 +229,14 @@ const Dashboard = () => {
             </span>
           )}
         </div>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '8px' }}>
+        {dailyChange !== null && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.15)', borderRadius: '20px', padding: '4px 12px', marginTop: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
+              {dailyChange >= 0 ? '▲' : '▼'} Bugün: {dailyChange >= 0 ? '+' : ''}{fc(dailyChange)}
+            </span>
+          </div>
+        )}
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '6px' }}>
           {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
         </p>
       </div>
