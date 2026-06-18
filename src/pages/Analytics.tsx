@@ -232,15 +232,39 @@ const Analytics = () => {
                       </p>
                     </div>
                     {!comparison && (
-                      <button onClick={async () => {
-                        setCompLoading(true)
-                        const result = await calculateComparison(totalCost, firstTxDate)
-                        setComparison(result)
-                        setCompLoading(false)
-                      }}
-                        style={{ padding: '8px 14px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>
-                        Hesapla
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
+                          <input
+                            type="date"
+                            defaultValue="2025-01-01"
+                            id="compFromDate"
+                            style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
+                          <input
+                            type="number"
+                            defaultValue={totalCost}
+                            id="compTotalCost"
+                            style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
+                          />
+                        </div>
+                        <button onClick={async () => {
+                          const dateEl = document.getElementById('compFromDate') as HTMLInputElement
+                          const costEl = document.getElementById('compTotalCost') as HTMLInputElement
+                          const fromDate = dateEl?.value || '2025-01-01'
+                          const cost = Number(costEl?.value) || totalCost
+                          setCompLoading(true)
+                          const result = await calculateComparison(cost, fromDate)
+                          setComparison(result)
+                          setCompLoading(false)
+                        }}
+                          style={{ padding: '10px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: '700' }}>
+                          Hesapla
+                        </button>
+                      </div>
                     )}
                   </div>
 
