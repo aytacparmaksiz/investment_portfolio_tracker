@@ -38,6 +38,12 @@ const Analytics = () => {
         .eq('portfolio_id', portfolios[0].id)
         .order('created_at', { ascending: false })
       setAssets(assetsData || [])
+      // Fiyatları çek
+      if (assetsData?.length) {
+        const { fetchAllPrices } = await import('../lib/prices')
+        const fetched = await fetchAllPrices(assetsData)
+        setPrices(fetched)
+      }
 
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
