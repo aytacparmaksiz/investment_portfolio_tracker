@@ -299,6 +299,28 @@ const Dashboard = () => {
               ))}
             </div>
           </div>
+          {selectedGroup && (() => {
+            const group = pieData.find((g: any) => g.type === selectedGroup)
+            if (!group) return null
+            return (
+              <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                <p style={{ fontWeight: '700', fontSize: '13px', marginBottom: '10px', color: 'var(--text-primary)' }}>{group.label} — Dağılım</p>
+                {group.items.map((asset: any) => {
+                  const value = getAssetValue(asset)
+                  const weight = group.value > 0 ? ((value / group.value) * 100).toFixed(1) : 0
+                  return (
+                    <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{asset.name}</span>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '13px', fontWeight: '700' }}>{fc(value)}</p>
+                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>%{weight}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       )}
 
