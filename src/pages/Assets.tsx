@@ -479,20 +479,28 @@ const Assets = () => {
           assets.map((asset: any, index: number) => {
             const isManualAsset = ['bes', 'vadeli'].includes(asset.type)
             const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
+            const TYPE_COLORS: Record<string, string> = {
+              hisse: '#dc2626', usd_hisse: '#2563eb', kripto: '#6366f1',
+              etf: '#d97706', doviz: '#059669', altin: '#ca8a04', bes: '#7c3aed', vadeli: '#0891b2'
+            }
+            const typeColor = TYPE_COLORS[asset.type] || '#6b7280'
             return (
               <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: index < assets.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div>
-                  <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                    <span style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>{ASSET_LABELS[asset.type]}</span>
-                    {asset.symbol ? ` ${asset.symbol}` : ''}
-                    {!isManualAsset ? ` · ${asset.quantity} adet` : ''}
-                  </p>
-                  {!isManualAsset && asset.avg_cost > 0 && (
-                    <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
-                      Ort: {formatCurrency(asset.avg_cost, asset.type)}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <div style={{ width: '4px', height: '36px', borderRadius: '2px', background: typeColor, flexShrink: 0 }} />
+                  <div>
+                    <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '3px' }}>
+                      <span style={{ background: `${typeColor}15`, color: typeColor, padding: '2px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: '700' }}>{ASSET_LABELS[asset.type]}</span>
+                      {asset.symbol ? <span style={{ marginLeft: '6px', fontWeight: '600' }}>{asset.symbol}</span> : ''}
+                      {!isManualAsset ? ` · ${asset.quantity} adet` : ''}
                     </p>
-                  )}
+                    {!isManualAsset && asset.avg_cost > 0 && (
+                      <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '3px' }}>
+                        Ort: {formatCurrency(asset.avg_cost, asset.type)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {isManualAsset && lastValue && (
