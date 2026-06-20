@@ -62,9 +62,17 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
       if (usdPrice) prices[sym] = usdPrice * usdtry
 
     } else if (asset.type === 'kripto') {
-      const price = await fetchCryptoPrice(sym)
-      if (price) prices[sym] = price
-
+      if (asset.coingecko_id) {
+        try {
+          const res = await fetch(`${COINGECKO}/simple/price?ids=${asset.coingecko_id}&vs_currencies=try`)
+          const data = await res.json()
+          const price = data?.[asset.coingecko_id]?.try
+          if (price) prices[sym] = price
+        } catch {}
+      } else {
+        const price = await fetchCryptoPrice(sym)
+        if (price) prices[sym] = price
+      }
     } else if (asset.type === 'doviz') {
       const dovizMap: Record<string, string> = {
         USD: 'USDTRY=X', EUR: 'EURTRY=X', GBP: 'GBPTRY=X', CHF: 'CHFTRY=X'

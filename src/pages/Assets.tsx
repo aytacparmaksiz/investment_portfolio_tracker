@@ -33,7 +33,7 @@ const Assets = () => {
 
   const [form, setForm] = useState({
     type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
-    interest_rate: '', maturity_days: ''
+    interest_rate: '', maturity_days: '', coingecko_id: ''
   })
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
@@ -70,16 +70,23 @@ const Assets = () => {
   const handleSymbolSearch = async (value: string) => {
     setForm({ ...form, symbol: value })
     if (value.length < 2) { setSearchResults([]); return }
+
     setSearching(true)
+    if (form.type === 'kripto') {
+      try {
+        const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${value}`)
+        const data = await res.json()
+        setSearchResults(data.coins || [])
+      } catch { setSearchResults([]) }
+      setSearching(false)
+      return
+    }
+
     const { searchTicker } = await import('../lib/search')
     const results = await searchTicker(value)
-
-    const typeMap: Record<string, string> = {
-      kripto: 'CRYPTOCURRENCY', hisse: 'EQUITY', usd_hisse: 'EQUITY', etf: 'ETF'
-    }
+    const typeMap: Record<string, string> = { hisse: 'EQUITY', usd_hisse: 'EQUITY', etf: 'ETF' }
     const wantedType = typeMap[form.type]
     const filtered = wantedType ? results.filter((r: any) => r.type === wantedType) : results
-
     setSearchResults(filtered.slice(0, 5))
     setSearching(false)
   }
@@ -98,7 +105,8 @@ const Assets = () => {
         name: form.name,
         symbol: form.symbol?.toUpperCase() || null,
         quantity: isManual ? 1 : Number(form.quantity),
-        avg_cost: form.avg_cost ? Number(form.avg_cost) : null
+        avg_cost: form.avg_cost ? Number(form.avg_cost) : null,
+        coingecko_id: form.coingecko_id || null
       })
       .select().single()
 
@@ -348,12 +356,8 @@ const Assets = () => {
                     <div key={r.symbol}
                       onClick={() => {
                         let cleanSymbol = r.symbol
-                        if (form.type === 'kripto') {
-                          cleanSymbol = r.symbol.replace('-USD', '').replace('-EUR', '')
-                        } else if (form.type === 'hisse') {
-                          cleanSymbol = r.symbol.replace('.IS', '')
-                        }
-                        setForm({ ...form, symbol: cleanSymbol, name: r.name })
+                        if (form.type === 'hisse') cleanSymbol = r.symbol.replace('.IS', '')
+                        setForm({ ...form, symbol: cleanSymbol, name: r.name, coingecko_id: r.id || '' })
                         setSearchResults([])
                       }}
                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
