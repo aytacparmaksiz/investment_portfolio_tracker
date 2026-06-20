@@ -33,7 +33,7 @@ const Assets = () => {
 
   const [form, setForm] = useState({
     type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
-    interest_rate: '', maturity_days: '', coingecko_id: ''
+    interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0]
   })
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
@@ -116,12 +116,14 @@ const Assets = () => {
       await supabase.from('manual_values').insert({ asset_id: asset.id, value: Number(form.manual_value) })
 
       if (isVadeli && form.interest_rate && form.maturity_days) {
-        const maturityDate = new Date()
+        const maturityDate = new Date(form.start_date)
         maturityDate.setDate(maturityDate.getDate() + Number(form.maturity_days))
         await supabase.from('assets').update({
           principal: Number(form.manual_value),
           interest_rate: Number(form.interest_rate),
-          maturity_date: maturityDate.toISOString().split('T')[0]
+          maturity_date: maturityDate.toISOString().split('T')[0],
+          start_date: form.start_date,
+          symbol: null
         }).eq('id', asset.id)
       }
     } else if (form.quantity && form.avg_cost) {
@@ -379,14 +381,20 @@ const Assets = () => {
                 <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
               </div>
               {isVadeli && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={labelStyle}>Yıllık Faiz (%)</label>
-                    <input type="number" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} />
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <label style={labelStyle}>Yıllık Faiz (%)</label>
+                      <input type="number" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Vade (Gün)</label>
+                      <input type="number" value={form.maturity_days} onChange={e => setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} />
+                    </div>
                   </div>
-                  <div>
-                    <label style={labelStyle}>Vade (Gün)</label>
-                    <input type="number" value={form.maturity_days} onChange={e => setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} />
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={labelStyle}>Başlangıç Tarihi</label>
+                    <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} style={inputStyle} />
                   </div>
                 </div>
               )}

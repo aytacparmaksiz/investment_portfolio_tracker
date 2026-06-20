@@ -133,8 +133,8 @@ const Dashboard = () => {
 
   const getAssetValue = (asset: any) => {
     if (asset.type === 'vadeli' && asset.principal && asset.interest_rate) {
-      const start = new Date(asset.created_at)
-      const days = Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      const start = new Date(asset.start_date || asset.created_at)
+      const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
       const dailyRate = asset.interest_rate / 365 / 100
       return Number(asset.principal) * (1 + dailyRate * days)
     }
