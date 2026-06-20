@@ -347,7 +347,12 @@ const Dashboard = () => {
                     else next.add(group.type)
                     setExpandedGroups(next)
                   }}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: '10px', marginBottom: '4px', cursor: 'pointer' }}>                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: '10px', marginBottom: '4px', cursor: 'pointer', transition: 'background 0.15s ease, transform 0.1s ease' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--border)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                  onMouseDown={e => e.currentTarget.style.transform = 'scale(0.99)'}
+                  onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: COLORS[gi % COLORS.length] }} />
                     <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{group.label}</span>
                     <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{group.items.length}</span>
@@ -373,7 +378,10 @@ const Dashboard = () => {
                   const hasPrice = prices[asset.symbol] !== undefined
 
                   return (
-                    <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px 10px 28px', borderBottom: ai < group.items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                    <div key={asset.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px 10px 28px', borderBottom: ai < group.items.length - 1 ? '1px solid var(--border-light)' : 'none', borderRadius: '8px', transition: 'background 0.15s ease' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                      <div>
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
