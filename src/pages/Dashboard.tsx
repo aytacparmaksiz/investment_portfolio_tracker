@@ -133,7 +133,7 @@ const Dashboard = () => {
       groups[type].cost += getCostValue(asset)
       groups[type].items.push(asset)
     })
-    return Object.values(groups).filter(g => g.value > 0)
+    return Object.values(groups).filter((g: any) => g.value > 0).sort((a: any, b: any) => b.value - a.value)
   }
 
   const pieData = groupByType()
