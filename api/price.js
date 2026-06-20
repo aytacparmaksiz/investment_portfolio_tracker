@@ -16,14 +16,15 @@ export default async function handler(req, res) {
           }
         }
       )
-  
-      const data = await response.json()
+     
       const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice
       const currency = data?.chart?.result?.[0]?.meta?.currency
-  
+      const prevClose = data?.chart?.result?.[0]?.meta?.previousClose ?? data?.chart?.result?.[0]?.meta?.chartPreviousClose
+
       if (!price) return res.status(404).json({ error: 'Fiyat bulunamadı' })
+
+      return res.status(200).json({ symbol, price, currency, prevClose })
   
-      return res.status(200).json({ symbol, price, currency })
     } catch (err) {
       return res.status(500).json({ error: err.message })
     }

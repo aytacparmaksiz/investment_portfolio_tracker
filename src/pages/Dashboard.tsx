@@ -368,32 +368,21 @@ const Dashboard = () => {
 
                   return (
                     <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px 10px 28px', borderBottom: ai < group.items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                      <div>
+                     <div>
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
                           {!isManual && asset.quantity ? ` · ${asset.quantity} adet` : ''}
-                          {hasPrice ? ` · ${isUSDAsset ? `$${(prices[asset.symbol] / usdRate).toFixed(2)}` : fc(prices[asset.symbol])}` : ''}
-                          {!isManual && asset.avg_cost > 0 ? ` · Maliyet: ${isUSDAsset ? `$${Number(asset.avg_cost).toFixed(2)}` : `₺${Number(asset.avg_cost).toLocaleString('tr-TR')}`}` : ''}
-                        </p>
+                          {hasPrice ? ` · ${isUSDAsset ? `$${(prices[asset.symbol + '_usd'] ?? (prices[asset.symbol] / usdRate)).toFixed(2)}` : fc(prices[asset.symbol])}` : ''}                        </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                          {isUSDAsset && displayCurrency === 'TRY'
-                            ? `$${(value / usdRate).toFixed(0)} · ${fc(value)}`
-                            : fc(value)}
+                          {fc(value)}
                         </p>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '2px' }}>
-                          {!isManual && cost > 0 && (
-                            <span style={{ fontSize: '11px', fontWeight: '600', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                              {fp(gainPct)}
-                            </span>
-                          )}
-                          {!isManual && hasPrice && (
-                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                              {prices[asset.symbol] > (asset.avg_cost || 0)
-                                ? `▲ ${(((prices[asset.symbol] - (asset.avg_cost || 0)) / (asset.avg_cost || 1)) * 100).toFixed(2)}%`
-                                : `▼ ${(((asset.avg_cost || 0) - prices[asset.symbol]) / (asset.avg_cost || 1) * 100).toFixed(2)}%`}
+                          {!isManual && prices[asset.symbol + '_dailypct'] !== undefined && (
+                            <span style={{ fontSize: '11px', fontWeight: '600', color: prices[asset.symbol + '_dailypct'] >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                              {prices[asset.symbol + '_dailypct'] >= 0 ? '▲' : '▼'} {Math.abs(prices[asset.symbol + '_dailypct']).toFixed(2)}%
                             </span>
                           )}
                         </div>

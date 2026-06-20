@@ -16,14 +16,20 @@ const CRYPTO_IDS: Record<string, string> = {
   LTC: 'litecoin',
 }
 
-async function fetchPrice(symbol: string): Promise<number | null> {
+async function fetchPriceFull(symbol: string): Promise<{price: number, prevClose: number} | null> {
   try {
     const res = await fetch(`${API_BASE}?symbol=${encodeURIComponent(symbol)}`)
     const data = await res.json()
-    return data?.price ? Number(data.price) : null
+    if (!data?.price) return null
+    return { price: Number(data.price), prevClose: Number(data.prevClose || data.price) }
   } catch {
     return null
   }
+}
+
+async function fetchPrice(symbol: string): Promise<number | null> {
+  const r = await fetchPriceFull(symbol)
+  return r?.price ?? null
 }
 
 export async function fetchCryptoPrice(symbol: string): Promise<number | null> {
@@ -49,26 +55,37 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
     if (!asset.symbol) return
     const sym = asset.symbol.toUpperCase()
 
-    if (asset.type === 'hisse') {
-      let price = await fetchPrice(`${sym}.IS`)
-      if (!price) price = await fetchPrice(`${sym}.E.IS`)
-      if (price) prices[sym] = price
+if (asset.type === 'hisse') {
+      let r = await fetchPriceFull(`${sym}.IS`)
+      if (!r) r = await fetchPriceFull(`${sym}.E.IS`)
+      if (r) {
+        prices[sym] = r.price
+        prices[sym + '_dailypct'] = r.prevClose ? ((r.price - r.prevClose) / r.prevClose) * 100 : 0
+      }
 
     } else if (asset.type === 'usd_hisse') {
-      const usdPrice = await fetchPrice(sym)
-      if (usdPrice) prices[sym] = usdPrice * usdtry
+      const r = await fetchPriceFull(sym)
+      if (r) {
+        prices[sym] = r.price * usdtry
+        prices[sym + '_dailypct'] = r.prevClose ? ((r.price - r.prevClose) / r.prevClose) * 100 : 0
+      }
 
     } else if (asset.type === 'etf') {
-      const usdPrice = await fetchPrice(sym)
-      if (usdPrice) prices[sym] = usdPrice * usdtry
+      const r = await fetchPriceFull(sym)
+      if (r) {
+        prices[sym] = r.price * usdtry
+        prices[sym + '_dailypct'] = r.prevClose ? ((r.price - r.prevClose) / r.prevClose) * 100 : 0
+      }
 
     } else if (asset.type === 'kripto') {
-      if (asset.coingecko_id) {
+      const id = asset.coingecko_id || CRYPTO_IDS[sym]
+      if (id) {
         try {
-          const res = await fetch(`${COINGECKO}/simple/price?ids=${asset.coingecko_id}&vs_currencies=try`)
+          const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`)
           const data = await res.json()
-          const price = data?.[asset.coingecko_id]?.try
-          if (price) prices[sym] = price
+          if (data?.[id]?.try) prices[sym] = data[id].try
+          if (data?.[id]?.usd) prices[sym + '_usd'] = data[id].usd
+          if (data?.[id]?.try_24h_change !== undefined) prices[sym + '_dailypct'] = data[id].try_24h_change
         } catch {}
       } else {
         const price = await fetchCryptoPrice(sym)
