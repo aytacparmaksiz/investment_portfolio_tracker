@@ -73,7 +73,14 @@ const Assets = () => {
     setSearching(true)
     const { searchTicker } = await import('../lib/search')
     const results = await searchTicker(value)
-    setSearchResults(results.slice(0, 5))
+
+    const typeMap: Record<string, string> = {
+      kripto: 'CRYPTOCURRENCY', hisse: 'EQUITY', usd_hisse: 'EQUITY', etf: 'ETF'
+    }
+    const wantedType = typeMap[form.type]
+    const filtered = wantedType ? results.filter((r: any) => r.type === wantedType) : results
+
+    setSearchResults(filtered.slice(0, 5))
     setSearching(false)
   }
   const handleSave = async () => {
@@ -340,7 +347,13 @@ const Assets = () => {
                   {searchResults.map((r: any) => (
                     <div key={r.symbol}
                       onClick={() => {
-                        setForm({ ...form, symbol: r.symbol, name: r.name })
+                        let cleanSymbol = r.symbol
+                        if (form.type === 'kripto') {
+                          cleanSymbol = r.symbol.replace('-USD', '').replace('-EUR', '')
+                        } else if (form.type === 'hisse') {
+                          cleanSymbol = r.symbol.replace('.IS', '')
+                        }
+                        setForm({ ...form, symbol: cleanSymbol, name: r.name })
                         setSearchResults([])
                       }}
                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
