@@ -16,7 +16,7 @@ const Analytics = () => {
   const [range, setRange] = useState<number>(30)
   const [activeTab, setActiveTab] = useState<'performans' | 'varliklar'>(
     location.pathname === '/analitik-varliklar' ? 'varliklar' : 'performans'
-  )  
+  )
   const [assets, setAssets] = useState<any[]>([])
   const [prices, setPrices] = useState<Record<string, number>>({})
   const [comparison, setComparison] = useState<any | null>(null)
@@ -41,7 +41,6 @@ const Analytics = () => {
         .eq('portfolio_id', portfolios[0].id)
         .order('created_at', { ascending: false })
       setAssets(assetsData || [])
-      // Fiyatları çek
       if (assetsData?.length) {
         const { fetchAllPrices } = await import('../lib/prices')
         const fetched = await fetchAllPrices(assetsData)
@@ -117,8 +116,6 @@ const Analytics = () => {
         <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Analitik</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Portföy performansı</p>
       </div>
-
-
 
       {/* Varlıklar Sekmesi */}
       {activeTab === 'varliklar' && (
@@ -210,116 +207,6 @@ const Analytics = () => {
                 ))}
               </div>
 
-              {/* Getiri Karşılaştırma */}
-              {totalCost > 0 && firstTxDate && (
-                <div style={{ ...card, marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div>
-                      <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Alsaydın ne olurdu?</p>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                        {firstTxDate} · ₺{totalCost.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} yatırım
-                      </p>
-                    </div>
-                    {!comparison && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
-                          <input
-                            type="date"
-                            defaultValue="2025-01-01"
-                            id="compFromDate"
-                            style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                          <input
-                            type="number"
-                            defaultValue={totalCost}
-                            id="compTotalCost"
-                            style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
-                          />
-                        </div>
-                        <button onClick={async () => {
-                          const dateEl = document.getElementById('compFromDate') as HTMLInputElement
-                          const costEl = document.getElementById('compTotalCost') as HTMLInputElement
-                          const fromDate = dateEl?.value || '2025-01-01'
-                          const cost = Number(costEl?.value) || totalCost
-                          setCompLoading(true)
-                          const result = await calculateComparison(cost, fromDate)
-                          setComparison(result)
-                          setCompLoading(false)
-                        }}
-                          style={{ padding: '10px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: '700' }}>
-                          Hesapla
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {compLoading && (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>⏳ Hesaplanıyor...</p>
-                  )}
-
-                  {comparison && (
-                    <div style={{ display: 'grid', gap: '10px' }}>
-                      {[
-                        { label: '📈 S&P 500 alsaydın', value: comparison.sp500, color: '#2563eb' },
-                        { label: '🇹🇷 BIST 100 alsaydın', value: comparison.bist, color: '#dc2626' },
-                        { label: '🥇 Altın alsaydın', value: comparison.gold, color: '#d97706' },
-                        { label: '📊 Enflasyona göre olması gereken', value: comparison.inflation, color: '#6b7280' },
-                      ].map((item, i) => {
-                        if (!item.value) return null
-                        const gain = item.value - totalCost
-                        const gainPct = (gain / totalCost) * 100
-                        const portfolioValue = Number(snapshots[snapshots.length-1]?.total_value || totalCost)
-                        const portfolioGainPct = ((portfolioValue - totalCost) / totalCost) * 100
-                        const beating = portfolioGainPct > gainPct
-
-                        return (
-                          <div key={i} style={{ background: `${item.color}10`, border: `1px solid ${item.color}30`, borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.label}</p>
-                              <p style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>
-                                ₺{item.value.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
-                              </p>
-                              <p style={{ fontSize: '11px', color: item.color, fontWeight: '600', marginTop: '2px' }}>
-                                {gain >= 0 ? '+' : ''}{gainPct.toFixed(1)}%
-                              </p>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <p style={{ fontSize: '28px' }}>{beating ? '✅' : '❌'}</p>
-                              <p style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                                {beating ? 'Yendin!' : 'Yenildin'}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })}
-
-                      {/* Portföy */}
-                      <div style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>💼 Portföyün</p>
-                          <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent)' }}>
-                            ₺{Number(snapshots[snapshots.length-1]?.total_value || totalCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
-                          </p>
-                          <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600', marginTop: '2px' }}>
-                            {(((Number(snapshots[snapshots.length-1]?.total_value || totalCost) - totalCost) / totalCost) * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                        <p style={{ fontSize: '28px' }}>💼</p>
-                      </div>
-
-                      <button onClick={() => setComparison(null)}
-                        style={{ padding: '8px', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
-                        Yeniden Hesapla
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Büyüme Grafiği */}
               <div style={{ ...card, marginBottom: '16px' }}>
                 <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
@@ -363,6 +250,106 @@ const Analytics = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
+
+              {/* Getiri Karşılaştırma */}
+              {totalCost > 0 && firstTxDate && (
+                <div style={{ ...card, marginBottom: '16px' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Alsaydın ne olurdu?</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
+                      {firstTxDate} · ₺{totalCost.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} yatırım
+                    </p>
+                  </div>
+
+                  {!comparison && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
+                        <input type="date" defaultValue="2025-01-01" id="compFromDate"
+                          style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
+                        <input type="number" defaultValue={totalCost} id="compTotalCost"
+                          style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                      </div>
+                      <button onClick={async () => {
+                        const dateEl = document.getElementById('compFromDate') as HTMLInputElement
+                        const costEl = document.getElementById('compTotalCost') as HTMLInputElement
+                        const fromDate = dateEl?.value || '2025-01-01'
+                        const cost = Number(costEl?.value) || totalCost
+                        setCompLoading(true)
+                        const result = await calculateComparison(cost, fromDate)
+                        setComparison(result)
+                        setCompLoading(false)
+                      }}
+                        style={{ padding: '12px', background: 'var(--accent)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '14px', fontWeight: '700' }}>
+                        Hesapla
+                      </button>
+                    </div>
+                  )}
+
+                  {compLoading && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>⏳ Hesaplanıyor...</p>
+                  )}
+
+                  {comparison && (
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                      {[
+                        { label: '📈 S&P 500 alsaydın', value: comparison.sp500, color: '#2563eb' },
+                        { label: '🇹🇷 BIST 100 alsaydın', value: comparison.bist, color: '#dc2626' },
+                        { label: '🥇 Altın alsaydın', value: comparison.gold, color: '#d97706' },
+                        { label: '📊 Enflasyona göre olması gereken', value: comparison.inflation, color: '#6b7280' },
+                      ].map((item, i) => {
+                        if (!item.value) return null
+                        const gain = item.value - totalCost
+                        const gainPct = (gain / totalCost) * 100
+                        const portfolioValue = Number(snapshots[snapshots.length-1]?.total_value || totalCost)
+                        const portfolioGainPct = ((portfolioValue - totalCost) / totalCost) * 100
+                        const beating = portfolioGainPct > gainPct
+
+                        return (
+                          <div key={i} style={{ background: `${item.color}10`, border: `1px solid ${item.color}30`, borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.label}</p>
+                              <p style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>
+                                ₺{item.value.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+                              </p>
+                              <p style={{ fontSize: '11px', color: item.color, fontWeight: '600', marginTop: '2px' }}>
+                                {gain >= 0 ? '+' : ''}{gainPct.toFixed(1)}%
+                              </p>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ fontSize: '28px' }}>{beating ? '✅' : '❌'}</p>
+                              <p style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                                {beating ? 'Yendin!' : 'Yenildin'}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      <div style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>💼 Portföyün</p>
+                          <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent)' }}>
+                            ₺{Number(snapshots[snapshots.length-1]?.total_value || totalCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+                          </p>
+                          <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600', marginTop: '2px' }}>
+                            {(((Number(snapshots[snapshots.length-1]?.total_value || totalCost) - totalCost) / totalCost) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <p style={{ fontSize: '28px' }}>💼</p>
+                      </div>
+
+                      <button onClick={() => setComparison(null)}
+                        style={{ padding: '8px', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
+                        Yeniden Hesapla
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </>
