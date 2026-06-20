@@ -253,7 +253,7 @@ const Dashboard = () => {
         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
           {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
         </p>
-Tamamlandı mı?Buradaki UI güzel gelmedi. bunu biraz daha toparlayalım göze güzel gelecek şekilde. Sonnet 4.6 LowClaude is AI and can make mistakes. Please double-check responses.
+
       </div>
 
       {/* 3 Metrik Kart */}
