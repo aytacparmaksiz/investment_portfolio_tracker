@@ -238,6 +238,7 @@ const Dashboard = () => {
             </p>
           </div>
         )}
+
         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
           {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
         </p>
