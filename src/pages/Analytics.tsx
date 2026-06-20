@@ -103,51 +103,71 @@ const Analytics = () => {
       </div>
 
       {/* Varlıklar Sekmesi */}
-      {activeTab === 'varliklar' && (
-        <div style={card}>
-          <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Maliyet Bazı Analizi</p>
-          {assets.filter(a => !['bes', 'vadeli'].includes(a.type)).length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <p style={{ fontSize: '32px', marginBottom: '8px' }}>📭</p>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Henüz varlık eklenmedi</p>
-            </div>
-          ) : (
-            assets.filter(a => !['bes', 'vadeli'].includes(a.type)).map((asset: any, index: number, arr: any[]) => {
-              const price = prices[asset.symbol] ?? asset.avg_cost ?? 0
-              const currentValue = price * Number(asset.quantity)
-              const costValue = (asset.avg_cost || 0) * Number(asset.quantity)
-              const gain = currentValue - costValue
-              const gainPct = costValue > 0 ? (gain / costValue) * 100 : 0
+      {activeTab === 'varliklar' && (() => {
+        const ASSET_LABELS: Record<string, string> = {
+          hisse: '🇹🇷 BIST Hisse', usd_hisse: '🇺🇸 ABD Hisse', kripto: '₿ Kripto',
+          etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın'
+        }
+        const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type))
+        const groups: Record<string, any[]> = {}
+        filtered.forEach(a => {
+          if (!groups[a.type]) groups[a.type] = []
+          groups[a.type].push(a)
+        })
 
-              return (
-                <div key={asset.id} style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: index < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <div>
-                      <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{asset.symbol} · {asset.quantity} adet</p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '13px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {gain >= 0 ? '+' : ''}{gain.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺
-                      </p>
-                      <p style={{ fontSize: '11px', fontWeight: '600', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {gain >= 0 ? '+' : ''}{gainPct.toFixed(2)}%
-                      </p>
-                    </div>
-                  </div>
-                  <div style={{ position: 'relative', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(Math.max((currentValue / (costValue || 1)) * 50, 5), 100)}%`, background: gain >= 0 ? 'var(--green)' : 'var(--red)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Maliyet: ₺{costValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Güncel: ₺{currentValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>
-                  </div>
+        return (
+          <div>
+            <p style={{ fontWeight: '800', fontSize: '17px', marginBottom: '16px', color: 'var(--text-primary)' }}>Varlık Performansı</p>
+            {filtered.length === 0 ? (
+              <div style={{ ...card, textAlign: 'center', padding: '32px 0' }}>
+                <p style={{ fontSize: '32px', marginBottom: '8px' }}>📭</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Henüz varlık eklenmedi</p>
+              </div>
+            ) : (
+              Object.entries(groups).map(([type, items]) => (
+                <div key={type} style={{ ...card, marginBottom: '14px' }}>
+                  <p style={{ fontWeight: '700', fontSize: '13px', marginBottom: '14px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {ASSET_LABELS[type] || type} · {items.length}
+                  </p>
+                  {items.map((asset: any, index: number) => {
+                    const price = prices[asset.symbol] ?? asset.avg_cost ?? 0
+                    const currentValue = price * Number(asset.quantity)
+                    const costValue = (asset.avg_cost || 0) * Number(asset.quantity)
+                    const gain = currentValue - costValue
+                    const gainPct = costValue > 0 ? (gain / costValue) * 100 : 0
+
+                    return (
+                      <div key={asset.id} style={{ marginBottom: index < items.length - 1 ? '16px' : 0, paddingBottom: index < items.length - 1 ? '16px' : 0, borderBottom: index < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <div>
+                            <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{asset.symbol} · {asset.quantity} adet</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: '13px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                              {gain >= 0 ? '+' : ''}{gain.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺
+                            </p>
+                            <p style={{ fontSize: '11px', fontWeight: '600', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                              {gain >= 0 ? '+' : ''}{gainPct.toFixed(2)}%
+                            </p>
+                          </div>
+                        </div>
+                        <div style={{ position: 'relative', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(Math.max((currentValue / (costValue || 1)) * 50, 5), 100)}%`, background: gain >= 0 ? 'var(--green)' : 'var(--red)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Maliyet: ₺{costValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Güncel: ₺{currentValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )
+      })()}
 
       {/* Performans Sekmesi */}
       {activeTab === 'performans' && (
