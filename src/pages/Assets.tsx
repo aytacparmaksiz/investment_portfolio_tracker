@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions } from '../lib/transactions'
 import { useNavigate } from 'react-router-dom'
+import { usePortfolio } from '../context/PortfolioContext'
 
 const ASSET_TYPES = [
   { value: 'hisse', label: 'BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
@@ -22,6 +23,7 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Assets = () => {
   const { user } = useAuth()
+  const { refresh } = usePortfolio()
   const navigate = useNavigate()
   const [assets, setAssets] = useState<any[]>([])
   const [portfolioId, setPortfolioId] = useState<string | null>(null)
@@ -176,6 +178,7 @@ const Assets = () => {
     setForm({ type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '' })
     setShowForm(false)
     fetchData()
+    refresh(true)
     setSaving(false)
     setTimeout(() => setSuccess(''), 3000)
   }
@@ -184,6 +187,7 @@ const Assets = () => {
     if (!confirm('Bu varlığı silmek istediğinize emin misiniz?')) return
     await supabase.from('assets').delete().eq('id', id)
     fetchData()
+    refresh(true)
   }
 
   const openTxModal = async (asset: any) => {
@@ -209,6 +213,7 @@ const Assets = () => {
     setTxForm({ quantity: '', price: '', date: new Date().toISOString().split('T')[0], note: '' })
     setTxSaving(false)
     fetchData()
+    refresh(true)
     setSuccess('İşlem kaydedildi!')
     setTimeout(() => setSuccess(''), 3000)
   }
