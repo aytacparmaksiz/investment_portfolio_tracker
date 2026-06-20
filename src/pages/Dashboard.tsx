@@ -230,24 +230,30 @@ const Dashboard = () => {
       <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '24px', marginBottom: '16px', boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}>
         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>Toplam Portföy Değeri</p>
         <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>{assets.length} varlık</span>
+        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{assets.length} varlık</p>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
           {totalCost > 0 && (
-            <span style={{ fontSize: '13px', fontWeight: '700', color: totalGain >= 0 ? '#a7f3d0' : '#fca5a5', background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: '20px' }}>
-              {fp(totalGainPct)} ({fc(totalGain)})
-            </span>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px 12px' }}>
+              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginBottom: '3px', fontWeight: '600' }}>TOPLAM GETİRİ</p>
+              <p style={{ fontSize: '14px', fontWeight: '700', color: totalGain >= 0 ? '#a7f3d0' : '#fca5a5' }}>
+                {fp(totalGainPct)} · {fc(totalGain)}
+              </p>
+            </div>
+          )}
+          {dailyChange !== null && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px 12px' }}>
+              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginBottom: '3px', fontWeight: '600' }}>BUGÜN</p>
+              <p style={{ fontSize: '14px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
+                {dailyChange >= 0 ? '+' : ''}{fc(dailyChange)}
+              </p>
+            </div>
           )}
         </div>
-        {dailyChange !== null && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.15)', borderRadius: '20px', padding: '4px 12px', marginTop: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
-              {dailyChange >= 0 ? '▲' : '▼'} Bugün: {dailyChange >= 0 ? '+' : ''}{fc(dailyChange)}
-            </span>
-          </div>
-        )}
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '6px' }}>
+
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
           {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
         </p>
+Tamamlandı mı?Buradaki UI güzel gelmedi. bunu biraz daha toparlayalım göze güzel gelecek şekilde. Sonnet 4.6 LowClaude is AI and can make mistakes. Please double-check responses.
       </div>
 
       {/* 3 Metrik Kart */}
