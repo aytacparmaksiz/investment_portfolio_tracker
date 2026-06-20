@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { fetchSnapshots } from '../lib/snapshot'
 import { calculateComparison } from '../lib/comparison'
@@ -8,45 +9,29 @@ import { useNavigate, useLocation } from 'react-router-dom'
 
 const Analytics = () => {
   const { user } = useAuth()
+  const { assets, prices, loading: portfolioLoading, portfolioId, refresh } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
-  const [portfolioId, setPortfolioId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<number>(30)
   const [activeTab, setActiveTab] = useState<'performans' | 'varliklar'>(
     location.pathname === '/analitik-varliklar' ? 'varliklar' : 'performans'
   )
-  const [assets, setAssets] = useState<any[]>([])
-  const [prices, setPrices] = useState<Record<string, number>>({})
   const [comparison, setComparison] = useState<any | null>(null)
   const [compLoading, setCompLoading] = useState(false)
   const [totalCost, setTotalCost] = useState<number>(0)
   const [firstTxDate, setFirstTxDate] = useState<string>('')
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { refresh(); fetchExtra() }, [])
   useEffect(() => { if (portfolioId) loadSnapshots(portfolioId, range) }, [range, portfolioId])
 
-  const fetchData = async () => {
+  const fetchExtra = async () => {
+    if (!user) return
     const { data: portfolios } = await supabase
       .from('portfolios').select('id').eq('user_id', user.id)
 
     if (portfolios?.length) {
-      setPortfolioId(portfolios[0].id)
-      await loadSnapshots(portfolios[0].id, range)
-
-      const { data: assetsData } = await supabase
-        .from('assets')
-        .select('*, manual_values(value, recorded_at)')
-        .eq('portfolio_id', portfolios[0].id)
-        .order('created_at', { ascending: false })
-      setAssets(assetsData || [])
-      if (assetsData?.length) {
-        const { fetchAllPrices } = await import('../lib/prices')
-        const fetched = await fetchAllPrices(assetsData)
-        setPrices(fetched)
-      }
-
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
         .select('total_cost, snapshot_date')

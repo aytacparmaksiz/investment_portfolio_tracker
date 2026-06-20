@@ -1,0 +1,100 @@
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { useAuth } from './AuthContext'
+import { supabase } from '../lib/supabase'
+import { fetchAllPrices } from '../lib/prices'
+import { saveSnapshot } from '../lib/snapshot'
+
+interface PortfolioContextType {
+  assets: any[]
+  prices: Record<string, number>
+  loading: boolean
+  pricesLoading: boolean
+  lastUpdated: Date | null
+  portfolioId: string | null
+  refresh: (force?: boolean) => Promise<void>
+}
+
+const PortfolioContext = createContext<PortfolioContextType>({} as any)
+
+export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth()
+  const [assets, setAssets] = useState<any[]>([])
+  const [prices, setPrices] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [pricesLoading, setPricesLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [portfolioId, setPortfolioId] = useState<string | null>(null)
+  const [hasFetched, setHasFetched] = useState(false)
+
+  const refresh = useCallback(async (force = false) => {
+    if (!user) return
+    if (hasFetched && !force) { setLoading(false); return }
+
+    const { data: portfolios } = await supabase
+      .from('portfolios').select('id').eq('user_id', user.id)
+
+    if (!portfolios?.length) {
+      await supabase.from('portfolios').insert({ user_id: user.id, name: 'Ana Portföy' })
+      setLoading(false)
+      setHasFetched(true)
+      return
+    }
+
+    setPortfolioId(portfolios[0].id)
+
+    const { data: memberPortfolios } = await supabase
+      .from('portfolio_members').select('portfolio_id').eq('user_id', user.id)
+
+    const allPortfolioIds = [
+      portfolios[0].id,
+      ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
+    ]
+
+    const { data: assetsData } = await supabase
+      .from('assets')
+      .select('*, manual_values(value, recorded_at)')
+      .in('portfolio_id', allPortfolioIds)
+      .order('created_at', { ascending: false })
+
+    const loaded = assetsData || []
+    setAssets(loaded)
+    setLoading(false)
+    setHasFetched(true)
+
+    if (loaded.length > 0) {
+      setPricesLoading(true)
+      const fetched = await fetchAllPrices(loaded)
+      setPrices(fetched)
+      setLastUpdated(new Date())
+
+      const tv = loaded.reduce((sum: number, a: any) => {
+        if (['bes', 'vadeli'].includes(a.type)) {
+          if (a.type === 'vadeli' && a.principal && a.interest_rate) {
+            const start = new Date(a.start_date || a.created_at)
+            const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000*60*60*24)))
+            const dailyRate = a.interest_rate / 365 / 100
+            return sum + Number(a.principal) * (1 + dailyRate * days)
+          }
+          const vals = a.manual_values || []
+          return sum + Number(vals[vals.length - 1]?.value || 0)
+        }
+        const p = fetched[a.symbol] ?? a.avg_cost ?? 0
+        return sum + p * Number(a.quantity)
+      }, 0)
+      const tc = loaded.reduce((sum: number, a: any) => {
+        if (['bes', 'vadeli'].includes(a.type)) return sum
+        return sum + (a.avg_cost || 0) * Number(a.quantity)
+      }, 0)
+      await saveSnapshot(portfolios[0].id, tv, tc)
+      setPricesLoading(false)
+    }
+  }, [user, hasFetched])
+
+  return (
+    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh }}>
+      {children}
+    </PortfolioContext.Provider>
+  )
+}
+
+export const usePortfolio = () => useContext(PortfolioContext)

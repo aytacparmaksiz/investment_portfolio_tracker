@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { fetchAllPrices } from '../lib/prices'
-import { saveSnapshot } from '../lib/snapshot'
 import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -10,114 +9,46 @@ const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed'
 
 const ASSET_LABELS: Record<string, string> = {
   hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: 'Kripto',
-  etf: 'ETF', doviz: 'Döviz/Altın', bes: 'BES', vadeli: 'Vadeli Mevduat'
+  etf: 'ETF', doviz: 'Döviz', altin: 'Altın', bes: 'BES', vadeli: 'Vadeli Mevduat'
 }
 
 const Dashboard = () => {
   const { user, signOut } = useAuth()
+  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh } = usePortfolio()
   const navigate = useNavigate()
-  const [assets, setAssets] = useState<any[]>([])
-  const [prices, setPrices] = useState<Record<string, number>>({})
-  const [loading, setLoading] = useState(true)
-  const [pricesLoading, setPricesLoading] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
-  const [usdRate, setUsdRate] = useState<number>(46.4)
-  const [portfolioId, setPortfolioId] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
-  const [dailyChange, setDailyChange] = useState<number | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
- 
-  useEffect(() => { fetchAssets() }, [])
+  const [dailyChange, setDailyChange] = useState<number | null>(null)
 
-  const fetchAssets = async () => {
-    const { data: portfolios } = await supabase
-      .from('portfolios').select('id').eq('user_id', user.id)
+  useEffect(() => { refresh() }, [])
 
-    if (!portfolios?.length) {
-      await supabase.from('portfolios').insert({ user_id: user.id, name: 'Ana Portföy' })
-      setLoading(false)
-      return
-    }
+  useEffect(() => {
+    const calcDaily = async () => {
+      if (!portfolioId || assets.length === 0) return
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yStr = yesterday.toISOString().split('T')[0]
 
-    if (portfolios?.length) setPortfolioId(portfolios[0].id)
+      const { data: ySnap } = await supabase
+        .from('portfolio_snapshots')
+        .select('total_value')
+        .eq('portfolio_id', portfolioId)
+        .eq('snapshot_date', yStr)
+        .single()
 
-    const { data: memberPortfolios } = await supabase
-      .from('portfolio_members').select('portfolio_id').eq('user_id', user.id)
-
-    const allPortfolioIds = [
-      portfolios[0].id,
-      ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
-    ]
-
-    const { data: assetsData } = await supabase
-      .from('assets')
-      .select('*, manual_values(value, recorded_at)')
-      .in('portfolio_id', allPortfolioIds)
-      .order('created_at', { ascending: false })
-
-    const loaded = assetsData || []
-    setAssets(loaded)
-    setLoading(false)
-
-    if (loaded.length > 0) {
-      setPricesLoading(true)
-      const fetched = await fetchAllPrices(loaded)
-      setPrices(fetched)
-      setLastUpdated(new Date())
-
-      if (fetched['USDTRY=X']) setUsdRate(fetched['USDTRY=X'])
-      else if (fetched['USD']) setUsdRate(fetched['USD'])
-
-      if (portfolios?.[0]?.id) {
-        const tv = loaded.reduce((sum: number, a: any) => {
-          if (['bes', 'vadeli'].includes(a.type)) {
-            const vals = a.manual_values || []
-            return sum + Number(vals[vals.length - 1]?.value || 0)
-          }
-          const p = fetched[a.symbol] ?? a.avg_cost ?? 0
-          return sum + p * Number(a.quantity)
-        }, 0)
-        const tc = loaded.reduce((sum: number, a: any) => {
-          if (['bes', 'vadeli'].includes(a.type)) {
-            const vals = a.manual_values || []
-            return sum + Number(vals[vals.length - 1]?.value || 0)
-          }
-          return sum + (a.avg_cost || 0) * Number(a.quantity)
-        }, 0)
-        await saveSnapshot(portfolios[0].id, tv, tc)
+      if (ySnap) {
+        const todayVal = assets.reduce((sum: number, a: any) => sum + getAssetValue(a), 0)
+        setDailyChange(todayVal - Number(ySnap.total_value))
       }
-      // Günlük değişim hesapla
-      if (portfolios?.[0]?.id) {
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        const yStr = yesterday.toISOString().split('T')[0]
-
-        const { data: ySnap } = await supabase
-          .from('portfolio_snapshots')
-          .select('total_value')
-          .eq('portfolio_id', portfolios[0].id)
-          .eq('snapshot_date', yStr)
-          .single()
-
-        if (ySnap) {
-          const todayVal = loaded.reduce((sum: number, a: any) => {
-            if (['bes', 'vadeli'].includes(a.type)) {
-              const vals = a.manual_values || []
-              return sum + Number(vals[vals.length - 1]?.value || 0)
-            }
-            const p = fetched[a.symbol] ?? a.avg_cost ?? 0
-            return sum + p * Number(a.quantity)
-          }, 0)
-          setDailyChange(todayVal - Number(ySnap.total_value))
-        }
-      }
-      setPricesLoading(false)
     }
-  }
+    calcDaily()
+  }, [assets, prices, portfolioId])
+
+  const usdRate = prices['USDTRY=X'] || 46.4
 
   const handleInvite = async () => {
     if (!inviteEmail || !portfolioId) return
@@ -203,7 +134,6 @@ const Dashboard = () => {
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingTop: '16px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Kumbaram</h1>
@@ -212,11 +142,11 @@ const Dashboard = () => {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border)' }}>
             <button onClick={() => setDisplayCurrency('TRY')}
-              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
+              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)' }}>
               ₺
             </button>
             <button onClick={() => setDisplayCurrency('USD')}
-              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
+              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)' }}>
               $
             </button>
           </div>
@@ -226,11 +156,11 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Ana Değer Kartı */}
       <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '24px', marginBottom: '16px', boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}>
         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>Toplam Portföy Değeri</p>
         <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{assets.length} varlık</p>
+
         {dailyChange !== null && (
           <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '8px 14px', marginTop: '14px' }}>
             <p style={{ fontSize: '13px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
@@ -242,10 +172,8 @@ const Dashboard = () => {
         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
           {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
         </p>
-
       </div>
 
-      {/* 3 Metrik Kart */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
         <div style={{ ...card, padding: '14px' }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Yatırılan</p>
@@ -265,16 +193,15 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Dağılım */}
       {pieData.length > 0 && (
         <div style={{ ...card, marginBottom: '16px' }}>
           <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Dağılım</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <ResponsiveContainer width={140} height={140}>
               <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="value" nameKey="name" paddingAngle={2}
-                onClick={(data: any) => setSelectedGroup(selectedGroup === data.type ? null : data.type)}
-                style={{ cursor: 'pointer' }}>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="value" nameKey="name" paddingAngle={2}
+                  onClick={(data: any) => setSelectedGroup(selectedGroup === data.type ? null : data.type)}
+                  style={{ cursor: 'pointer' }}>
                   {pieData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
@@ -306,7 +233,10 @@ const Dashboard = () => {
                   const value = getAssetValue(asset)
                   const weight = group.value > 0 ? ((value / group.value) * 100).toFixed(1) : 0
                   return (
-                    <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
+                    <div key={asset.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)', borderRadius: '6px', transition: 'background 0.15s ease' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{asset.name}</span>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: '13px', fontWeight: '700' }}>{fc(value)}</p>
@@ -321,7 +251,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Portföy Listesi */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Portföy</p>
         {pieData.length === 0 ? (
@@ -335,7 +264,6 @@ const Dashboard = () => {
             const groupGainPct = group.cost > 0 ? (groupGain / group.cost) * 100 : 0
             return (
               <div key={gi} style={{ marginBottom: '8px' }}>
-                {/* Kategori Başlığı */}
                 <div onClick={() => {
                     const next = new Set(expandedGroups)
                     if (next.has(group.type)) next.delete(group.type)
@@ -347,11 +275,12 @@ const Dashboard = () => {
                   onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
                   onMouseDown={e => e.currentTarget.style.transform = 'scale(0.99)'}
                   onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: COLORS[gi % COLORS.length] }} />
                     <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{group.label}</span>
                     <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{group.items.length}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', transition: 'transform 0.2s', transform: expandedGroups.has(group.type) ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>                  </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', transition: 'transform 0.2s', transform: expandedGroups.has(group.type) ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
+                  </div>
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(group.value)}</p>
                     {group.cost > 0 && (
@@ -362,12 +291,8 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                {/* Varlıklar */}
                 {expandedGroups.has(group.type) && group.items.map((asset: any, ai: number) => {
                   const value = getAssetValue(asset)
-                  const cost = getCostValue(asset)
-                  const gain = value - cost
-                  const gainPct = cost > 0 ? (gain / cost) * 100 : 0
                   const isManual = ['bes', 'vadeli'].includes(asset.type)
                   const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
                   const hasPrice = prices[asset.symbol] !== undefined
@@ -377,17 +302,16 @@ const Dashboard = () => {
                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px 10px 28px', borderBottom: ai < group.items.length - 1 ? '1px solid var(--border-light)' : 'none', borderRadius: '8px', transition: 'background 0.15s ease' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                     <div>
+                      <div>
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
                           {!isManual && asset.quantity ? ` · ${asset.quantity} adet` : ''}
-                          {hasPrice ? ` · ${isUSDAsset ? `$${(prices[asset.symbol + '_usd'] ?? (prices[asset.symbol] / usdRate)).toFixed(2)}` : fc(prices[asset.symbol])}` : ''}                        </p>
+                          {hasPrice ? ` · ${isUSDAsset ? `$${(prices[asset.symbol + '_usd'] ?? (prices[asset.symbol] / usdRate)).toFixed(2)}` : fc(prices[asset.symbol])}` : ''}
+                        </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                          {fc(value)}
-                        </p>
+                        <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(value)}</p>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '2px' }}>
                           {!isManual && prices[asset.symbol + '_dailypct'] !== undefined && (
                             <span style={{ fontSize: '11px', fontWeight: '600', color: prices[asset.symbol + '_dailypct'] >= 0 ? 'var(--green)' : 'var(--red)' }}>
@@ -405,13 +329,11 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Yenile */}
-      <button onClick={fetchAssets} disabled={pricesLoading}
+      <button onClick={() => refresh(true)} disabled={pricesLoading}
         style={{ width: '100%', padding: '13px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', color: pricesLoading ? 'var(--text-tertiary)' : 'var(--accent)', fontSize: '14px', fontWeight: '600', marginBottom: '12px', boxShadow: 'var(--shadow)', transition: 'all 0.2s' }}>
         {pricesLoading ? '⏳ Güncelleniyor...' : '🔄 Fiyatları Yenile'}
       </button>
 
-      {/* Davet */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -442,7 +364,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Alt Navigasyon */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
         {[
           { path: '/', icon: '📊', label: 'Portföy' },
@@ -451,8 +372,8 @@ const Dashboard = () => {
           { path: '/varliklar', icon: '➕', label: 'İşlem' },
         ].map(item => (
           <button key={item.path} onClick={() => navigate(item.path)}
-            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: '600', padding: '4px 16px' }}>
-            <span style={{ fontSize: '22px' }}>{item.icon}</span>
+            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: '600', padding: '4px 12px' }}>
+            <span style={{ fontSize: '20px' }}>{item.icon}</span>
             {item.label}
           </button>
         ))}

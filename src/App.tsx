@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { PortfolioProvider } from './context/PortfolioContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
@@ -26,7 +27,9 @@ const AppRoutes = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <PortfolioProvider>
+        <AppRoutes />
+      </PortfolioProvider>
     </AuthProvider>
   )
 }
