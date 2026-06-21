@@ -32,18 +32,6 @@ async function fetchPrice(symbol: string): Promise<number | null> {
   return r?.price ?? null
 }
 
-export async function fetchCryptoPrice(symbol: string): Promise<number | null> {
-  try {
-    const id = CRYPTO_IDS[symbol.toUpperCase()]
-    if (!id) return null
-    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try`)
-    const data = await res.json()
-    return data?.[id]?.try ?? null
-  } catch {
-    return null
-  }
-}
-
 export async function fetchAllPrices(assets: any[]): Promise<Record<string, number>> {
   const prices: Record<string, number> = {}
 
@@ -51,11 +39,34 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
   const usdtry = await fetchPrice('USDTRY=X') ?? 46.4
   prices['USDTRY=X'] = usdtry
 
+  // Kripto varlıkları topla ve TEK seferde sorgula
+  const kriptoAssets = assets.filter(a => a.type === 'kripto' && a.symbol)
+  const kriptoIdMap: Record<string, string> = {} // id -> sym
+  kriptoAssets.forEach(a => {
+    const sym = a.symbol.toUpperCase()
+    const id = a.coingecko_id || CRYPTO_IDS[sym]
+    if (id) kriptoIdMap[id] = sym
+  })
+
+  const kriptoIds = Object.keys(kriptoIdMap)
+  if (kriptoIds.length > 0) {
+    try {
+      const res = await fetch(`${COINGECKO}/simple/price?ids=${kriptoIds.join(',')}&vs_currencies=try,usd&include_24hr_change=true`)
+      const data = await res.json()
+      Object.entries(kriptoIdMap).forEach(([id, sym]) => {
+        if (data?.[id]?.try) prices[sym] = data[id].try
+        if (data?.[id]?.usd) prices[sym + '_usd'] = data[id].usd
+        if (data?.[id]?.try_24h_change !== undefined) prices[sym + '_dailypct'] = data[id].try_24h_change
+      })
+    } catch {}
+  }
+
+  // Diğer varlık türleri (paralel)
   await Promise.all(assets.map(async (asset) => {
     if (!asset.symbol) return
     const sym = asset.symbol.toUpperCase()
 
-if (asset.type === 'hisse') {
+    if (asset.type === 'hisse') {
       let r = await fetchPriceFull(`${sym}.IS`)
       if (!r) r = await fetchPriceFull(`${sym}.E.IS`)
       if (r) {
@@ -77,20 +88,6 @@ if (asset.type === 'hisse') {
         prices[sym + '_dailypct'] = r.prevClose ? ((r.price - r.prevClose) / r.prevClose) * 100 : 0
       }
 
-    } else if (asset.type === 'kripto') {
-      const id = asset.coingecko_id || CRYPTO_IDS[sym]
-      if (id) {
-        try {
-          const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`)
-          const data = await res.json()
-          if (data?.[id]?.try) prices[sym] = data[id].try
-          if (data?.[id]?.usd) prices[sym + '_usd'] = data[id].usd
-          if (data?.[id]?.try_24h_change !== undefined) prices[sym + '_dailypct'] = data[id].try_24h_change
-        } catch {}
-      } else {
-        const price = await fetchCryptoPrice(sym)
-        if (price) prices[sym] = price
-      }
     } else if (asset.type === 'doviz') {
       const dovizMap: Record<string, string> = {
         USD: 'USDTRY=X', EUR: 'EURTRY=X', GBP: 'GBPTRY=X', CHF: 'CHFTRY=X'
