@@ -310,7 +310,11 @@ const Assets = () => {
               <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-              Mevcut: <strong>{txAsset.quantity} adet</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
+              Mevcut: <strong>{txAsset.quantity} adet</strong> · Ort: <strong>{
+                isUSD(txAsset.type) && txAsset.total_try_cost
+                  ? `$${((txAsset.total_try_cost / (prices['USDTRY=X'] || 46.4)) / Number(txAsset.quantity)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                  : formatCurrency(txAsset.avg_cost, txAsset.type)
+              }</strong>
             </p>
 
             {/* Alım/Satım Toggle */}
