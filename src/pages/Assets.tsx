@@ -310,11 +310,7 @@ const Assets = () => {
               <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-              Mevcut: <strong>{txAsset.quantity} adet</strong> · Ort: <strong>{
-                isUSD(txAsset.type) && txAsset.total_try_cost
-                  ? `$${((txAsset.total_try_cost / (prices['USDTRY=X'] || 46.4)) / Number(txAsset.quantity)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                  : formatCurrency(txAsset.avg_cost, txAsset.type)
-              }</strong>
+              Mevcut: <strong>{txAsset.quantity} adet</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
             </p>
 
             {/* Alım/Satım Toggle */}
@@ -614,11 +610,7 @@ const Assets = () => {
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol ? <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span> : ''}
                           {!isManualAsset ? ` · ${asset.quantity} adet` : ''}
-                          {!isManualAsset && asset.avg_cost > 0 ? ` · Ort: ${
-                            isUSD(asset.type) && asset.total_try_cost
-                              ? `$${((asset.total_try_cost / (prices['USDTRY=X'] || 46.4)) / Number(asset.quantity)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                              : formatCurrency(asset.avg_cost, asset.type)
-                          }` : ''}                        </p>
+                          {!isManualAsset && asset.avg_cost > 0 ? ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}` : ''}                    </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isManualAsset && lastValue && (
