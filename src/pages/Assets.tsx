@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions } from '../lib/transactions'
 import { useNavigate } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
+import { fetchHistoricalRate } from '../lib/historicalRate'
 
 const ASSET_TYPES = [
   { value: 'hisse', label: 'BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
@@ -23,7 +24,7 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Assets = () => {
   const { user } = useAuth()
-  const { refresh } = usePortfolio()
+  const { refresh, prices } = usePortfolio()
   const navigate = useNavigate()
   const [assets, setAssets] = useState<any[]>([])
   const [portfolioId, setPortfolioId] = useState<string | null>(null)
@@ -35,12 +36,15 @@ const Assets = () => {
 
   const [form, setForm] = useState({
     type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
-    interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0]
+    interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0],
+    txDate: new Date().toISOString().split('T')[0], manualRate: ''
   })
+  const [rateNotFound, setRateNotFound] = useState(false)
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
   const [txType, setTxType] = useState<'buy' | 'sell'>('buy')
-  const [txForm, setTxForm] = useState({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '' })
+  const [txForm, setTxForm] = useState({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
+  const [txRateNotFound, setTxRateNotFound] = useState(false)
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
   const [txError, setTxError] = useState('')
@@ -171,7 +175,23 @@ const Assets = () => {
         }).eq('id', asset.id)
       }
     } else if (form.quantity && form.avg_cost) {
-      await addTransaction(asset.id, 'buy', Number(form.quantity), Number(form.avg_cost), new Date().toISOString().split('T')[0])
+      const isUsdType = isUSD(form.type)
+      if (isUsdType) {
+        // form.avg_cost burada artık TOPLAM ödenen TRY tutarı
+        const historicalRate = await fetchHistoricalRate(form.txDate)
+        const currentRate = historicalRate || prices['USDTRY=X'] || (form.manualRate ? Number(form.manualRate) : null)
+        if (!currentRate) {
+          setRateNotFound(true)
+          setError('O tarihe ait kur bulunamadı. Aşağıdan kuru manuel girip tekrar kaydet.')
+          setSaving(false)
+          return
+        }
+        const tryAmount = Number(form.avg_cost)
+        const usdPrice = (tryAmount / currentRate) / Number(form.quantity)
+        await addTransaction(asset.id, 'buy', Number(form.quantity), usdPrice, form.txDate, undefined, currentRate, tryAmount)
+      } else {
+        await addTransaction(asset.id, 'buy', Number(form.quantity), Number(form.avg_cost), form.txDate)
+      }
     }
 
     setSuccess('Varlık başarıyla eklendi!')
@@ -201,25 +221,39 @@ const Assets = () => {
 
   const handleTxSave = async () => {
     setTxError('')
-    if (!txForm.quantity || !txForm.price) return setTxError('Adet ve fiyat zorunludur.')
+    const usdType = isUSD(txAsset.type)
+
+    if (usdType) {
+      if (!txForm.quantity || !txForm.tryTotal) return setTxError('Adet ve TRY tutarı zorunludur.')
+    } else {
+      if (!txForm.quantity || !txForm.price) return setTxError('Adet ve fiyat zorunludur.')
+    }
     if (txType === 'sell' && Number(txForm.quantity) > Number(txAsset.quantity)) {
       return setTxError(`Maksimum satılabilir: ${txAsset.quantity}`)
     }
     setTxSaving(true)
 
+    let finalPrice = Number(txForm.price)
     let tryRate: number | undefined
     let tryTotal: number | undefined
-    if (isUSD(txAsset.type) && txType === 'buy') {
-      const usdAmount = Number(txForm.quantity) * Number(txForm.price)
-      if (txForm.tryTotal) {
-        tryTotal = Number(txForm.tryTotal)
-        tryRate = tryTotal / usdAmount
+
+    if (usdType) {
+      tryTotal = Number(txForm.tryTotal)
+      const historicalRate = await fetchHistoricalRate(txForm.date)
+      const currentUsdRate = historicalRate || prices['USDTRY=X'] || (txForm.manualRate ? Number(txForm.manualRate) : null)
+      if (!currentUsdRate) {
+        setTxRateNotFound(true)
+        setTxError('O tarihe ait kur bulunamadı. Aşağıdan kuru manuel girip tekrar dene.')
+        setTxSaving(false)
+        return
       }
+      finalPrice = (tryTotal / currentUsdRate) / Number(txForm.quantity)
+      tryRate = currentUsdRate
     }
 
-    const { error } = await addTransaction(txAsset.id, txType, Number(txForm.quantity), Number(txForm.price), txForm.date, txForm.note, tryRate, tryTotal)
+    const { error } = await addTransaction(txAsset.id, txType, Number(txForm.quantity), finalPrice, txForm.date, txForm.note, tryRate, tryTotal)
     if (error) { setTxError('Hata: ' + error.message); setTxSaving(false); return }
-    
+
     const history = await fetchTransactions(txAsset.id)
     setTxHistory(history)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '' })
@@ -291,37 +325,47 @@ const Assets = () => {
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Adet</label>
-                <input type="number" value={txForm.quantity} onChange={e => setTxForm({ ...txForm, quantity: e.target.value })}
-                  placeholder="100"
-                  style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+            {isUSD(txAsset.type) ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Adet</label>
+                  <input type="number" value={txForm.quantity} onChange={e => setTxForm({ ...txForm, quantity: e.target.value })}
+                    placeholder="100"
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>
+                    {txType === 'buy' ? 'Ödediğin TRY' : 'Aldığın TRY'}
+                  </label>
+                  <input type="number" value={txForm.tryTotal} onChange={e => setTxForm({ ...txForm, tryTotal: e.target.value })}
+                    placeholder="örn. 24200"
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                </div>
+                {txRateNotFound && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>O Tarihteki USD/TRY Kuru (manuel)</label>
+                    <input type="number" value={txForm.manualRate} onChange={e => setTxForm({ ...txForm, manualRate: e.target.value })}
+                      placeholder="örn. 44.20"
+                      style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                  </div>
+                )}
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Birim Fiyat ({isUSD(txAsset.type) ? '$' : '₺'})
-                </label>
-                <input type="number" value={txForm.price} onChange={e => setTxForm({ ...txForm, price: e.target.value })}
-                  placeholder="250"
-                  style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
-              </div>
-            </div>
-
-            {isUSD(txAsset.type) && txType === 'buy' && (
-              <div style={{ marginBottom: '10px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>
-                  💡 Ödediğin Gerçek TRY Tutarı (opsiyonel ama önerilir)
-                </label>
-                <input type="number" value={txForm.tryTotal} onChange={e => setTxForm({ ...txForm, tryTotal: e.target.value })}
-                  placeholder="örn. 24200"
-                  style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  Bunu girersen gerçek TL maliyetin doğru hesaplanır (kur farkından etkilenmez)
-                </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Adet</label>
+                  <input type="number" value={txForm.quantity} onChange={e => setTxForm({ ...txForm, quantity: e.target.value })}
+                    placeholder="100"
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Birim Fiyat (₺)</label>
+                  <input type="number" value={txForm.price} onChange={e => setTxForm({ ...txForm, price: e.target.value })}
+                    placeholder="250"
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                </div>
               </div>
             )}
-
             <div style={{ marginBottom: '10px' }}>
               <label style={labelStyle}>Tarih</label>
               <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} style={inputStyle} />
@@ -472,23 +516,48 @@ const Assets = () => {
                     </div>
                   </div>
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={labelStyle}>Başlangıç Tarihi</label>
-                    <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} style={inputStyle} />
-                  </div>
+                  <label style={labelStyle}>İşlem Tarihi</label>
+                  <input type="date" value={form.txDate} onChange={e => setForm({ ...form, txDate: e.target.value })} style={inputStyle} />
                 </div>
+                {rateNotFound && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ ...labelStyle, color: 'var(--accent)' }}>O Tarihteki USD/TRY Kuru (manuel)</label>
+                    <input type="number" value={form.manualRate} onChange={e => setForm({ ...form, manualRate: e.target.value })} placeholder="örn. 44.20" style={{ ...inputStyle, border: '1px solid var(--accent)' }} />
+                  </div>
+                )}
+              </div>
               )}
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            isUSD(form.type) ? (
               <div>
-                <label style={labelStyle}>Adet</label>
-                <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Adet</label>
+                    <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Ödediğin Toplam TRY</label>
+                    <input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="24000" style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={labelStyle}>İşlem Tarihi</label>
+                  <input type="date" value={form.txDate} onChange={e => setForm({ ...form, txDate: e.target.value })} style={inputStyle} />
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>Ort. Maliyet ({selectedType?.currency === 'USD' ? '$' : '₺'})</label>
-                <input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Adet</label>
+                  <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Ort. Maliyet (₺)</label>
+                  <input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} />
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {error && (

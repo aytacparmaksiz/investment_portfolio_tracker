@@ -180,9 +180,12 @@ const Analytics = () => {
                     const gain = currentValue - costValueTRY
                     const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                     const dailyPct = prices[asset.symbol + '_dailypct']
-                    const unitCostDisplay = isUSD ? `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : `₺${Number(asset.avg_cost || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
-                    const unitPriceDisplay = isUSD ? `$${(livePrice / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
-
+                    const unitCostDisplay = isUSD
+                      ? `$${((costValueTRY / Number(asset.quantity || 1)) / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                      : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
+                    const unitPriceDisplay = isUSD
+                      ? `$${(livePrice / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                      : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
                     return (
                       <div key={asset.id} style={{ marginBottom: index < items.length - 1 ? '16px' : 0, paddingBottom: index < items.length - 1 ? '16px' : 0, borderBottom: index < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>

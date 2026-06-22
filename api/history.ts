@@ -5,7 +5,7 @@ export default async function handler(req: any, res: any) {
   if (!symbol || !from) return res.status(400).json({ error: 'symbol ve from gerekli' })
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1mo&period1=${Math.floor(new Date(from).getTime()/1000)}&period2=${Math.floor(Date.now()/1000)}`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${Math.floor(new Date(from).getTime()/1000) - 86400*3}&period2=${Math.floor(Date.now()/1000)}`
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
