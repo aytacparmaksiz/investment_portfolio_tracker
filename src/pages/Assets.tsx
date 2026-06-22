@@ -610,8 +610,11 @@ const Assets = () => {
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol ? <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span> : ''}
                           {!isManualAsset ? ` · ${asset.quantity} adet` : ''}
-                          {!isManualAsset && asset.avg_cost > 0 ? ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}` : ''}
-                        </p>
+                          {!isManualAsset && asset.avg_cost > 0 ? ` · Ort: ${
+                            isUSD(asset.type) && asset.total_try_cost
+                              ? `$${((asset.total_try_cost / (prices['USDTRY=X'] || 46.4)) / Number(asset.quantity)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              : formatCurrency(asset.avg_cost, asset.type)
+                          }` : ''}                        </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isManualAsset && lastValue && (
