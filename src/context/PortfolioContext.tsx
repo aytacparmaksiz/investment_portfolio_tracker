@@ -25,6 +25,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [portfolioId, setPortfolioId] = useState<string | null>(null)
   const [hasFetched, setHasFetched] = useState(false)
+  const [isHidden, setIsHidden] = useState(false)
 
   const refresh = useCallback(async (force = false) => {
     if (!user) return
@@ -91,7 +92,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   }, [user, hasFetched])
 
   return (
-    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh }}>
+    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, isHidden, setIsHidden }}>
       {children}
     </PortfolioContext.Provider>
   )

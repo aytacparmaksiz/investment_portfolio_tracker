@@ -3,27 +3,13 @@ import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts'
 
 const GOAL_USD = 1000000
 
-// Çizimindeki gibi çizginin üzerindeki noktaların ortasına %45.5 yazdıran kutucuk
-const CustomizedLineLabel = (props: any) => {
-  const { x, y, value } = props
-  if (value === undefined || value === null) return null
-  return (
-    <g>
-      <rect x={x - 22} y={y - 22} width={44} height={16} rx={4} fill="#e6f4ea" stroke="#10b981" strokeWidth={1} />
-      <text x={x} y={y - 11} fill="#059669" fontSize={10} fontWeight="700" textAnchor="middle">
-        %{Number(value).toFixed(1)}
-      </text>
-    </g>
-  )
-}
-
 const Goals = () => {
   const { user } = useAuth()
-  const { assets, prices, portfolioId } = usePortfolio()
+  const { assets, prices, portfolioId, isHidden, setIsHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [manualAssets, setManualAssets] = useState<any[]>([])
@@ -41,6 +27,20 @@ const Goals = () => {
     amount_try: '',
     income_try: '' 
   })
+
+  // Çizginin üzerindeki oran etiketleri (Bileşen içine alınarak global isHidden state'ine bağlandı)
+  const CustomizedLineLabel = (props: any) => {
+    const { x, y, value } = props
+    if (value === undefined || value === null || isHidden) return null
+    return (
+      <g>
+        <rect x={x - 22} y={y - 22} width={44} height={16} rx={4} fill="#e6f4ea" stroke="#10b981" strokeWidth={1} />
+        <text x={x} y={y - 11} fill="#059669" fontSize={10} fontWeight="700" textAnchor="middle">
+          %{Number(value).toFixed(1)}
+        </text>
+      </g>
+    )
+  }
 
   useEffect(() => { if (portfolioId) fetchData() }, [portfolioId])
 
@@ -130,9 +130,11 @@ const Goals = () => {
     fetchData()
   }
 
-  const fc = (val: number) =>
-    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
-
+  const fc = (val: number) => {
+    if (isHidden) return '••••••'
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
+  }
+  
   const chartData = savings.map(s => {
     const gelir = Number(s.income_try || 0)
     const tasarruf = Number(s.amount_try || 0)
@@ -178,9 +180,18 @@ const Goals = () => {
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
 
-      <div style={{ paddingTop: '16px', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>🎯 Hedefler</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>$1.000.000 hedefine yolculuk</p>
+      {/* Başlık Alanı ve Sağ Köşeye Senkronize Edilen Global Buton */}
+      <div style={{ paddingTop: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>🎯 Hedefler</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>$1.000.000 hedefine yolculuk</p>
+        </div>
+        <button 
+          onClick={() => setIsHidden(!isHidden)} 
+          style={{ padding: '8px 12px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}
+        >
+          {isHidden ? '👁️ Göster' : '🔒 Gizle'}
+        </button>
       </div>
 
       {/* Hedef Tüpü */}
@@ -316,6 +327,16 @@ const Goals = () => {
                 <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="100000" style={inputStyle} />
               </div>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={labelStyle}>Aylık Gelir (₺)</label>
+                <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="220000" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Tasarruf Tutarı (₺)</label>
+                <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="100000" style={inputStyle} />
+              </div>
+            </div>
             <button onClick={handleAddSaving}
               style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
               Kaydet
@@ -345,15 +366,12 @@ const Goals = () => {
         ) : (
           <>
             <ResponsiveContainer width="100%" height={260}>
-              {/* barGap={0} verilerek barların üst üste binmesi sağlandı */}
-              <ComposedChart data={chartData} barGap={0} margin={{ top: 20, right: -10, left: -15, bottom: 5 }}>
+              {/* barGap={-28} verilerek barların tam arkalı önlü çakışması sağlandı */}
+              <ComposedChart data={chartData} barGap={-28} margin={{ top: 20, right: -10, left: -15, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} tickLine={false} axisLine={false} />
                 
-                {/* Sol Y Ekseni: TL Değerleri için (Barlar buraya bağlı) */}
                 <YAxis yAxisId="left" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-                
-                {/* Sağ Y Ekseni: Oran (%) Değerleri için (Çizgi buraya bağlı ve gizli) */}
                 <YAxis yAxisId="right" orientation="right" domain={[0, 100]} hide={true} />
                 
                 <Tooltip 
@@ -376,18 +394,22 @@ const Goals = () => {
                 />
                 <Legend verticalAlign="top" height={36} iconSize={10} wrapperStyle={{ fontSize: '11px', fontWeight: '600' }} />
                 
-                {/* 
-                  Çizimindeki (image_2568a9.png) Tasarım:
-                  İki bar da yAxisId="left" üzerinden çalışır. Aynı barSize verilerek üst üste binerler.
-                  Gelir arkada (açık renk), Tasarruf önde (koyu renk) sıfırdan yukarı doğru tırmanır.
-                */}
+                {/* Gelir ve Tasarruf barları left Y ekseni üzerinden tam üst üste bindirildi */}
                 <Bar yAxisId="left" dataKey="gelir" name="Gelir" fill="#80cbd0" barSize={28} radius={[6, 6, 0, 0]} />
-                <Bar yAxisId="left" dataKey="tasarruf" name="Tasarruf" fill="#264653" barSize={28} radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="left" dataKey="tasarruf" name="Tasarruf" fill="#264653" barSize={28} radius={[6, 6, 0, 0]}>
+                  {!isHidden && (
+                    <LabelList 
+                      dataKey="tasarruf" 
+                      position="center" 
+                      fill="#ffffff" 
+                      fontSize={10} 
+                      fontWeight="700" 
+                      formatter={(v: number) => `${(v / 1000).toFixed(0)}K`} 
+                    />
+                  )}
+                </Bar>
 
-                {/* 
-                  Çizgi yAxisId="right" eksenine bağlandı! 
-                  Böylece 0-100 arasında ölçeklenerek tam çizimindeki gibi barların üzerinde özgürce dalgalanır.
-                */}
+                {/* Çift eksenli sağ ölçeğe bağlı dalgalanan oran çizgisi */}
                 <Line 
                   yAxisId="right"
                   type="monotone" 
@@ -404,7 +426,7 @@ const Goals = () => {
         )}
       </div>
 
-      {/* Alt Navigasyon */}
+      {/* Alt Navigasyon Sıralaması (4: Hedefler, 5: İşlem) */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
         {[
           { path: '/', icon: '📊', label: 'Portföy' },

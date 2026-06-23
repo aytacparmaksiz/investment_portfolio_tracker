@@ -9,12 +9,12 @@ import { useNavigate, useLocation } from 'react-router-dom'
 
 const Analytics = () => {
   const { user } = useAuth()
-  const { assets, prices, portfolioId, refresh } = usePortfolio()
+  // Global context üzerinden isHidden yapısını dahil ettik
+  const { assets, prices, portfolioId, refresh, isHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
   
-  // URL'e göre aktif sekmeyi anlık belirliyoruz (Geçişi 0ms yapan kısım)
   const activeTab = location.pathname === '/analitik-varliklar' ? 'varliklar' : 'performans'
   
   const [range, setRange] = useState<number>(30)
@@ -24,13 +24,11 @@ const Analytics = () => {
   const [firstTxDate, setFirstTxDate] = useState<string>('')
   const [expandedAssetGroups, setExpandedAssetGroups] = useState<Set<string>>(new Set())
 
-  // İlk açılışta verileri tazele
   useEffect(() => { 
     refresh()
     fetchExtra() 
   }, [])
 
-  // Range veya portfolioId değiştiğinde snapshot'ları getir (Sayfayı kilitlemeden arka planda yüklenir)
   useEffect(() => { 
     if (portfolioId) loadSnapshots(portfolioId, range) 
   }, [range, portfolioId])
@@ -78,8 +76,11 @@ const Analytics = () => {
     setSnapshots(data)
   }
 
-  const fc = (val: number) =>
-    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
+  // fc fonksiyonunu global isHidden durumuna göre şartlandırdık
+  const fc = (val: number) => {
+    if (isHidden) return '••••••'
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
+  }
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
@@ -181,12 +182,15 @@ const Analytics = () => {
                     const gain = currentValue - costValueTRY
                     const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                     const dailyPct = prices[asset.symbol + '_dailypct']
-                    const unitCostDisplay = isUSD
+                    
+                    // Ham birim verilerini gizlilik durumuna göre şartlandırdık
+                    const unitCostDisplay = isHidden ? '••••••' : (isUSD
                       ? `$${((costValueTRY / Number(asset.quantity || 1)) / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                      : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
-                    const unitPriceDisplay = isUSD
+                      : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
+                    
+                    const unitPriceDisplay = isHidden ? '••••••' : (isUSD
                       ? `$${(livePrice / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                      : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
+                      : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
 
                     return (
                       <div key={asset.id} style={{ marginBottom: index < items.length - 1 ? '16px' : 0, paddingBottom: index < items.length - 1 ? '16px' : 0, borderBottom: index < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
@@ -195,15 +199,15 @@ const Analytics = () => {
                             <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
                             <div>
                               <p style={{ fontWeight: '700', fontSize: '14px', color: '#1e1b4b' }}>{asset.name}</p>
-                              <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>{asset.symbol} · {asset.quantity} adet</p>
+                              <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>{asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet</p>
                             </div>
                           </div>
                           <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                             <p style={{ fontSize: '15px', fontWeight: '800', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                              {gain >= 0 ? `+₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : `-₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`}
+                              {isHidden ? '••••••' : (gain >= 0 ? `+₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : `-₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`)}
                             </p>
                             <p style={{ fontSize: '11px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                              {gain >= 0 ? '▲' : '▼'} {Math.abs(gainPct).toFixed(2)}%
+                              {isHidden ? '••••••' : `${gain >= 0 ? '▲' : '▼'} ${Math.abs(gainPct).toFixed(2)}%`}
                             </p>
                           </div>
                         </div>
@@ -211,19 +215,19 @@ const Analytics = () => {
                         <div style={{ display: 'flex', gap: '0', borderTop: '1px solid var(--border-light)', paddingTop: '10px' }}>
                           <div style={{ flex: 1 }}>
                             <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>MALİYET</p>
-                            <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>₺{costValueTRY.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</p>
+                            <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(costValueTRY)}</p>
                             <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{unitCostDisplay}</p>
                           </div>
                           <div style={{ flex: 1 }}>
                             <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>GÜNCEL</p>
-                            <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>₺{currentValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</p>
+                            <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(currentValue)}</p>
                             <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{unitPriceDisplay}</p>
                           </div>
                           <div style={{ flex: 1, textAlign: 'right' }}>
                             <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>GÜNLÜK</p>
                             {dailyPct !== undefined ? (
                               <p style={{ fontSize: '12px', fontWeight: '700', color: dailyPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                                {dailyPct >= 0 ? '▲' : '▼'} {Math.abs(dailyPct).toFixed(2)}%
+                                {isHidden ? '••••••' : `${dailyPct >= 0 ? '▲' : '▼'} ${Math.abs(dailyPct).toFixed(2)}%`}
                               </p>
                             ) : <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>—</p>}
                           </div>
@@ -246,7 +250,7 @@ const Analytics = () => {
               <p style={{ fontSize: '40px', marginBottom: '12px' }}>📊</p>
               <p style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>Henüz yeterli veri yok</p>
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5' }}>
-                Grafik oluşması için en az 2 gün fiyat yenilemen gerekiyor.
+                Grafik oluşması için en az 2 দিন fiyat yenilemen gerekiyor.
               </p>
             </div>
           ) : (
@@ -255,7 +259,7 @@ const Analytics = () => {
                 {[
                   { label: 'Başlangıç', value: fc(first), color: 'var(--text-primary)' },
                   { label: 'Güncel', value: fc(last), color: 'var(--accent)' },
-                  { label: 'Dönem Değişimi', value: `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`, color: totalGain >= 0 ? 'var(--green)' : 'var(--red)', sub: `${totalGain >= 0 ? '+' : ''}${totalGainPct.toFixed(2)}%` },
+                  { label: 'Dönem Değişimi', value: isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`, color: totalGain >= 0 ? 'var(--green)' : 'var(--red)', sub: isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${totalGainPct.toFixed(2)}%` },
                   { label: 'Toplam Kar/Zarar', value: fc(last - (chartData[chartData.length-1]?.maliyet||0)), color: (last - (chartData[chartData.length-1]?.maliyet||0)) >= 0 ? 'var(--green)' : 'var(--red)' },
                 ].map((item, i) => (
                   <div key={i} style={{ ...card, padding: '16px' }}>
@@ -294,7 +298,7 @@ const Analytics = () => {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
+                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
                     <Tooltip formatter={(val: any) => fc(val)} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }} />
                     <Area type="monotone" dataKey="deger" name="Değer" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
                     <Area type="monotone" dataKey="maliyet" name="Maliyet" stroke="#9ca3af" fill="url(#colorMaliyet)" strokeWidth={1.5} strokeDasharray="4 4" />
@@ -313,7 +317,7 @@ const Analytics = () => {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
+                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
                     <Tooltip formatter={(val: any) => fc(val)} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }} />
                     <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
                     <Area type="monotone" dataKey="kar" name="Kar/Zarar" stroke="#059669" fill="url(#colorKar)" strokeWidth={2} />
@@ -326,7 +330,7 @@ const Analytics = () => {
                   <div style={{ marginBottom: '12px' }}>
                     <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Alsaydın ne olurdu?</p>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                      {firstTxDate} · ₺{totalCost.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} yatırım
+                      {firstTxDate} · {isHidden ? '••••••' : `₺${totalCost.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`} yatırım
                     </p>
                   </div>
 
@@ -382,10 +386,10 @@ const Analytics = () => {
                             <div>
                               <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.label}</p>
                               <p style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>
-                                ₺{item.value.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+                                {fc(item.value)}
                               </p>
                               <p style={{ fontSize: '11px', color: item.color, fontWeight: '600', marginTop: '2px' }}>
-                                {gain >= 0 ? '+' : ''}{gainPct.toFixed(1)}%
+                                {isHidden ? '••••••' : `${gain >= 0 ? '+' : ''}${gainPct.toFixed(1)}%`}
                               </p>
                             </div>
                             <div style={{ textAlign: 'center' }}>
@@ -402,10 +406,10 @@ const Analytics = () => {
                         <div>
                           <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>💼 Portföyün</p>
                           <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent)' }}>
-                            ₺{Number(snapshots[snapshots.length-1]?.total_value || totalCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+                            {fc(Number(snapshots[snapshots.length-1]?.total_value || totalCost))}
                           </p>
                           <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600', marginTop: '2px' }}>
-                            {(((Number(snapshots[snapshots.length-1]?.total_value || totalCost) - totalCost) / totalCost) * 100).toFixed(1)}%
+                            {isHidden ? '••••••' : `${(((Number(snapshots[snapshots.length-1]?.total_value || totalCost) - totalCost) / totalCost) * 100).toFixed(1)}%`}
                           </p>
                         </div>
                         <p style={{ fontSize: '28px' }}>💼</p>
@@ -424,7 +428,7 @@ const Analytics = () => {
         </>
       )}
 
-      {/* Alt Navigasyon */}
+      {/* Alt Navigasyon Sıralaması (4: Hedefler, 5: İşlem) */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
         {[
           { path: '/', icon: '📊', label: 'Portföy' },

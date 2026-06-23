@@ -7,8 +7,8 @@ import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const ASSET_TYPES = [
-  { value: 'hisse', label: '🇹🇷 BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
-  { value: 'usd_hisse', label: '🇺🇸 ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
+  { value: 'hisse', label: 'BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
+  { value: 'usd_hisse', label: 'ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
   { value: 'kripto', label: '₿ Kripto', hasSymbol: true, symbolPlaceholder: 'BTC, ETH...', currency: 'USD' },
   { value: 'etf', label: '📈 ETF', hasSymbol: true, symbolPlaceholder: 'SPY, QQQ...', currency: 'USD' },
   { value: 'doviz', label: '💱 Döviz', hasSymbol: true, symbolPlaceholder: 'USD, EUR, GBP...', currency: 'TRY' },
@@ -24,7 +24,8 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Assets = () => {
   const { user } = useAuth()
-  const { refresh, prices } = usePortfolio()
+  // Global context üzerinden isHidden yapısını dahil ettik
+  const { refresh, prices, isHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [assets, setAssets] = useState<any[]>([])
@@ -269,10 +270,13 @@ const Assets = () => {
     setTimeout(() => setSuccess(''), 3000)
   }
 
-  const formatCurrency = (val: number, type?: string) =>
-    type && isUSD(type)
+  // formatCurrency fonksiyonu isHidden kontrolüne göre güncellendi
+  const formatCurrency = (val: number, type?: string) => {
+    if (isHidden) return '••••••'
+    return type && isUSD(type)
       ? `$${Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
       : `₺${Number(val).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
+  }
 
   const card = {
     background: 'var(--bg-card)',
@@ -314,7 +318,7 @@ const Assets = () => {
               <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-              Mevcut: <strong>{txAsset.quantity} adet</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
+              Mevcut: <strong>{isHidden ? '••••••' : `${txAsset.quantity} adet`}</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
             </p>
 
             <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '3px', marginBottom: '20px', border: '1px solid var(--border)' }}>
@@ -403,7 +407,7 @@ const Assets = () => {
                       {tx.note && <p style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{tx.note}</p>}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{tx.quantity} adet</p>
+                      <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
                     </div>
                   </div>
@@ -602,13 +606,13 @@ const Assets = () => {
                         <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol ? <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span> : ''}
-                          {!isManualAsset ? ` · ${asset.quantity} adet` : ''}
+                          {!isManualAsset ? ` · ${isHidden ? '••••••' : asset.quantity} adet` : ''}
                           {!isManualAsset && asset.avg_cost > 0 ? ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}` : ''}
                         </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isManualAsset && lastValue && (
-                          <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>₺{Number(lastValue).toLocaleString('tr-TR')}</p>
+                          <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `₺${Number(lastValue).toLocaleString('tr-TR')}`}</p>
                         )}
                         {!isManualAsset && (
                           <button onClick={() => openTxModal(asset)}
@@ -630,7 +634,7 @@ const Assets = () => {
         })()}
       </div>
 
-      {/* Alt Navigasyon */}
+      {/* Alt Navigasyon Sıralaması */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
         {[
           { path: '/', icon: '📊', label: 'Portföy' },

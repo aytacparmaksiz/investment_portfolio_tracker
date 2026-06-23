@@ -14,7 +14,7 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth()
-  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh } = usePortfolio()
+  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, isHidden, setIsHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
@@ -145,9 +145,7 @@ const Dashboard = () => {
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
 
   const fc = (val: number) => {
-    if (displayCurrency === 'USD') {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val / usdRate)
-    }
+    if (isHidden) return '••••••'
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
 
@@ -195,6 +193,21 @@ const Dashboard = () => {
               $
             </button>
           </div>
+          <button 
+            onClick={() => setIsHidden(!isHidden)} 
+            style={{ 
+              padding: '8px 12px', 
+              background: 'var(--bg-card)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '10px', 
+              cursor: 'pointer', 
+              fontSize: '13px', 
+              fontWeight: '600', 
+              color: 'var(--text-primary)' 
+            }}
+          >
+            {isHidden ? '👁️ Göster' : '🔒 Gizle'}
+          </button>
           <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', boxShadow: 'var(--shadow)' }}>
             Çıkış
           </button>
