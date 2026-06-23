@@ -636,8 +636,8 @@ const Assets = () => {
           { path: '/', icon: '📊', label: 'Portföy' },
           { path: '/performans', icon: '📈', label: 'Performans' },
           { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
           { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
+          { path: '/varliklar', icon: '➕', label: 'İşlem' },
         ].map(item => (
           <button key={item.path} onClick={() => navigate(item.path)}
             style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>

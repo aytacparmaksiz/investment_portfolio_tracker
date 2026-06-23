@@ -287,7 +287,7 @@ const Goals = () => {
       {/* Tasarruf Oranı Bölümü */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💰 Aylık Tasarruf Oranı</p>
+          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💰 Tasarruf Oranı</p>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button onClick={() => setShowManageSavings(!showManageSavings)}
               style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '700' }}>
@@ -410,8 +410,8 @@ const Goals = () => {
           { path: '/', icon: '📊', label: 'Portföy' },
           { path: '/performans', icon: '📈', label: 'Performans' },
           { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
           { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
+          { path: '/varliklar', icon: '➕', label: 'İşlem' },
         ].map(item => (
           <button key={item.path} onClick={() => navigate(item.path)}
             style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>
