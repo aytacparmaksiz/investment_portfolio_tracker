@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
-const GOAL_USD = 3000000
+const GOAL_USD = 1000000
 
 // Çizimindeki gibi çizginin üzerindeki noktaların ortasına %45.5 yazdıran kutucuk
 const CustomizedLineLabel = (props: any) => {
@@ -223,11 +223,11 @@ const Goals = () => {
       <div style={{ ...card, marginBottom: '16px' }}>
         <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '12px', color: 'var(--text-primary)' }}>Toplam Dağılım</p>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📊 Portföy (Hisse, Kripto vb.)</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📊 Portföy </span>
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(portfolioTotal)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Durağan Varlıklar (Ev, Araba vb.)</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Durağan Varlıklar </span>
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(manualTotal)}</span>
         </div>
       </div>
