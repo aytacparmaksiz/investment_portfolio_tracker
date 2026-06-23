@@ -22,10 +22,10 @@ const AppRoutes = () => {
   <Route path="/hedefler" element={<PrivateRoute><Goals /></PrivateRoute>} />
   
   {/* Key ekleyerek React'in sayfaları tamamen sıfırlamasını sağlıyoruz */}
-  <Route path="/performans" element={<PrivateRoute><Analytics key="performans" /></PrivateRoute>} />
-  <Route path="/analitik-varliklar" element={<PrivateRoute><Analytics key="analitik" /></PrivateRoute>} />
-</Routes>
-  )
+  // App.tsx içindeki ilgili alanı şu şekilde temizle:
+  <Route path="/performans" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+  <Route path="/analitik-varliklar" element={<PrivateRoute><Analytics /></PrivateRoute>} /></Routes>
+    )
 }
 
 const App = () => {

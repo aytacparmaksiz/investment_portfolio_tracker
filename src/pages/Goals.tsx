@@ -2,24 +2,45 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { useNavigate } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 const GOAL_USD = 3000000
+
+// Çizimindeki gibi çizginin üzerindeki noktaların ortasına %45.5 yazdıran kutucuk
+const CustomizedLineLabel = (props: any) => {
+  const { x, y, value } = props
+  if (value === undefined || value === null) return null
+  return (
+    <g>
+      <rect x={x - 22} y={y - 22} width={44} height={16} rx={4} fill="#e6f4ea" stroke="#10b981" strokeWidth={1} />
+      <text x={x} y={y - 11} fill="#059669" fontSize={10} fontWeight="700" textAnchor="middle">
+        %{Number(value).toFixed(1)}
+      </text>
+    </g>
+  )
+}
 
 const Goals = () => {
   const { user } = useAuth()
   const { assets, prices, portfolioId } = usePortfolio()
   const navigate = useNavigate()
+  const location = useLocation()
   const [manualAssets, setManualAssets] = useState<any[]>([])
   const [savings, setSavings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showAssetForm, setShowAssetForm] = useState(false)
+  const [showAssetList, setShowAssetList] = useState(false)
   const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
 
   const [showSavingForm, setShowSavingForm] = useState(false)
-  const [savingForm, setSavingForm] = useState({ month: new Date().toISOString().slice(0, 7), amount_try: '' })
+  const [showManageSavings, setShowManageSavings] = useState(false)
+  const [savingForm, setSavingForm] = useState({ 
+    month: new Date().toISOString().slice(0, 7), 
+    amount_try: '',
+    income_try: '' 
+  })
 
   useEffect(() => { if (portfolioId) fetchData() }, [portfolioId])
 
@@ -78,32 +99,53 @@ const Goals = () => {
   }
 
   const handleAddSaving = async () => {
-    if (!savingForm.amount_try) return
+    if (!savingForm.amount_try || !savingForm.income_try) return
     const monthDate = savingForm.month + '-01'
+    
+    const payload = {
+      amount_try: Number(savingForm.amount_try),
+      income_try: Number(savingForm.income_try)
+    }
+
     const { data: existing } = await supabase
       .from('savings').select('id').eq('portfolio_id', portfolioId).eq('month', monthDate).single()
 
     if (existing) {
-      await supabase.from('savings').update({ amount_try: Number(savingForm.amount_try) }).eq('id', existing.id)
+      await supabase.from('savings').update(payload).eq('id', existing.id)
     } else {
       await supabase.from('savings').insert({
         portfolio_id: portfolioId,
         month: monthDate,
-        amount_try: Number(savingForm.amount_try)
+        ...payload
       })
     }
-    setSavingForm({ month: new Date().toISOString().slice(0, 7), amount_try: '' })
+    setSavingForm({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '' })
     setShowSavingForm(false)
+    fetchData()
+  }
+
+  const handleDeleteSaving = async (id: string) => {
+    if (!confirm('Bu aya ait tasarruf kaydını silmek istediğine emin misin?')) return
+    await supabase.from('savings').delete().eq('id', id)
     fetchData()
   }
 
   const fc = (val: number) =>
     new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
 
-  const chartData = savings.map(s => ({
-    month: new Date(s.month).toLocaleString('tr-TR', { month: 'short', year: '2-digit' }),
-    tasarruf: Number(s.amount_try)
-  }))
+  const chartData = savings.map(s => {
+    const gelir = Number(s.income_try || 0)
+    const tasarruf = Number(s.amount_try || 0)
+    const oran = gelir > 0 ? (tasarruf / gelir) * 100 : 0
+
+    return {
+      id: s.id,
+      month: new Date(s.month).toLocaleString('tr-TR', { month: 'short', year: '2-digit' }),
+      tasarruf,
+      gelir,
+      oran
+    }
+  })
 
   const card = {
     background: 'var(--bg-card)',
@@ -148,7 +190,6 @@ const Goals = () => {
           <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent)' }}>%{progressPct.toFixed(1)}</p>
         </div>
 
-        {/* Yatay Tüp */}
         <div style={{ position: 'relative', height: '24px', background: 'var(--bg-elevated)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
           <div style={{
             position: 'absolute', left: 0, top: 0, height: '100%',
@@ -161,7 +202,7 @@ const Goals = () => {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>₺0</span>
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{fc(goalTRY)} ($3.000.000)</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{fc(goalTRY / 1000000)}M</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
@@ -178,7 +219,7 @@ const Goals = () => {
         </div>
       </div>
 
-      {/* Portföy + Manuel Varlık Dağılımı */}
+      {/* Dağılım Kartı */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '12px', color: 'var(--text-primary)' }}>Toplam Dağılım</p>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
@@ -186,22 +227,27 @@ const Goals = () => {
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(portfolioTotal)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Manuel Varlıklar (Ev, Araba vb.)</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Durağan Varlıklar (Ev, Araba vb.)</span>
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(manualTotal)}</span>
         </div>
       </div>
 
-      {/* Manuel Varlıklar Listesi */}
+      {/* Durağan Varlıklar Kartı */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🏠 Manuel Varlıklar</p>
-          <button onClick={() => setShowAssetForm(!showAssetForm)}
-            style={{ padding: '6px 12px', background: showAssetForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
-            {showAssetForm ? 'Kapat' : '+ Ekle'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowAssetList(!showAssetList)}>
+            <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🏠 Durağan Varlıklar</p>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showAssetList ? '▲ Gizle' : '▼ Göster'}</span>
+          </div>
+          {showAssetList && (
+            <button onClick={() => setShowAssetForm(!showAssetForm)}
+              style={{ padding: '6px 12px', background: showAssetForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
+              {showAssetForm ? 'Kapat' : '+ Ekle'}
+            </button>
+          )}
         </div>
 
-        {showAssetForm && (
+        {showAssetList && showAssetForm && (
           <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ marginBottom: '10px' }}>
               <label style={labelStyle}>Ad</label>
@@ -218,32 +264,40 @@ const Goals = () => {
           </div>
         )}
 
-        {manualAssets.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>Henüz manuel varlık eklenmedi</p>
-        ) : (
-          manualAssets.map((a: any, i: number) => (
-            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < manualAssets.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{a.name}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '700' }}>{fc(a.value_try)}</span>
-                <button onClick={() => handleDeleteManualAsset(a.id)}
-                  style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '6px', color: 'var(--red)', padding: '4px 8px', fontSize: '11px', fontWeight: '700' }}>
-                  Sil
-                </button>
+        {showAssetList && (
+          manualAssets.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>Henüz manuel varlık eklenmedi</p>
+          ) : (
+            manualAssets.map((a: any, i: number) => (
+              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < manualAssets.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{a.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '700' }}>{fc(a.value_try)}</span>
+                  <button onClick={() => handleDeleteManualAsset(a.id)}
+                    style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '6px', color: 'var(--red)', padding: '4px 8px', fontSize: '11px', fontWeight: '700' }}>
+                    Sil
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            ))
+          )
         )}
       </div>
 
-      {/* Tasarruf Paneli */}
+      {/* Tasarruf Oranı Bölümü */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💰 Aylık Tasarruf</p>
-          <button onClick={() => setShowSavingForm(!showSavingForm)}
-            style={{ padding: '6px 12px', background: showSavingForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
-            {showSavingForm ? 'Kapat' : '+ Ekle'}
-          </button>
+          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💰 Aylık Tasarruf Oranı</p>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button onClick={() => setShowManageSavings(!showManageSavings)}
+              style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '700' }}>
+              {showManageSavings ? 'Kapat' : '⚙️ Düzenle'}
+            </button>
+            <button onClick={() => setShowSavingForm(!showSavingForm)}
+              style={{ padding: '6px 12px', background: showSavingForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
+              {showSavingForm ? 'Kapat' : '+ Ekle'}
+            </button>
+          </div>
         </div>
 
         {showSavingForm && (
@@ -252,9 +306,15 @@ const Goals = () => {
               <label style={labelStyle}>Ay</label>
               <input type="month" value={savingForm.month} onChange={e => setSavingForm({ ...savingForm, month: e.target.value })} style={inputStyle} />
             </div>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={labelStyle}>Tasarruf Tutarı (₺)</label>
-              <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="15000" style={inputStyle} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={labelStyle}>Aylık Gelir (₺)</label>
+                <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="220000" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Tasarruf Tutarı (₺)</label>
+                <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="100000" style={inputStyle} />
+              </div>
             </div>
             <button onClick={handleAddSaving}
               style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
@@ -263,18 +323,84 @@ const Goals = () => {
           </div>
         )}
 
+        {showManageSavings && chartData.length > 0 && (
+          <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px', maxHeight: '160px', overflowY: 'auto' }}>
+            <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase' }}>Kayıtlı Ayları Sil</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+              {chartData.map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px 10px', fontSize: '12px' }}>
+                  <span style={{ fontWeight: '600' }}>{s.month}</span>
+                  <button onClick={() => handleDeleteSaving(s.id)} 
+                    style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px' }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {chartData.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>Henüz tasarruf kaydı yok</p>
         ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-              <Tooltip formatter={(val: any) => fc(val)} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
-              <Bar dataKey="tasarruf" fill="#6366f1" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={260}>
+              {/* barGap={0} verilerek barların üst üste binmesi sağlandı */}
+              <ComposedChart data={chartData} barGap={0} margin={{ top: 20, right: -10, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} tickLine={false} axisLine={false} />
+                
+                {/* Sol Y Ekseni: TL Değerleri için (Barlar buraya bağlı) */}
+                <YAxis yAxisId="left" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
+                
+                {/* Sağ Y Ekseni: Oran (%) Değerleri için (Çizgi buraya bağlı ve gizli) */}
+                <YAxis yAxisId="right" orientation="right" domain={[0, 100]} hide={true} />
+                
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }}>
+                          <p style={{ fontWeight: '700', marginBottom: '6px', color: 'var(--text-primary)' }}>{data.month}</p>
+                          <p style={{ color: '#80cbd0' }}>Gelir: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.gelir)}</strong></p>
+                          <p style={{ color: '#264653' }}>Tasarruf: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.tasarruf)}</strong></p>
+                          <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-light)', color: '#10b981', fontWeight: '700' }}>
+                            Tasarruf Oranı: %{data.oran.toFixed(1)}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Legend verticalAlign="top" height={36} iconSize={10} wrapperStyle={{ fontSize: '11px', fontWeight: '600' }} />
+                
+                {/* 
+                  Çizimindeki (image_2568a9.png) Tasarım:
+                  İki bar da yAxisId="left" üzerinden çalışır. Aynı barSize verilerek üst üste binerler.
+                  Gelir arkada (açık renk), Tasarruf önde (koyu renk) sıfırdan yukarı doğru tırmanır.
+                */}
+                <Bar yAxisId="left" dataKey="gelir" name="Gelir" fill="#80cbd0" barSize={28} radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="left" dataKey="tasarruf" name="Tasarruf" fill="#264653" barSize={28} radius={[6, 6, 0, 0]} />
+
+                {/* 
+                  Çizgi yAxisId="right" eksenine bağlandı! 
+                  Böylece 0-100 arasında ölçeklenerek tam çizimindeki gibi barların üzerinde özgürce dalgalanır.
+                */}
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="oran" 
+                  name="Tasarruf Oranı (%)" 
+                  stroke="#10b981" 
+                  strokeWidth={2} 
+                  dot={{ r: 4, fill: '#10b981' }}
+                  label={<CustomizedLineLabel />}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </>
         )}
       </div>
 

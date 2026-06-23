@@ -13,19 +13,27 @@ const Analytics = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  
+  // URL'e göre aktif sekmeyi anlık belirliyoruz (Geçişi 0ms yapan kısım)
+  const activeTab = location.pathname === '/analitik-varliklar' ? 'varliklar' : 'performans'
+  
   const [range, setRange] = useState<number>(30)
-  const [activeTab, setActiveTab] = useState<'performans' | 'varliklar'>(
-    location.pathname === '/analitik-varliklar' ? 'varliklar' : 'performans'
-  )
   const [comparison, setComparison] = useState<any | null>(null)
   const [compLoading, setCompLoading] = useState(false)
   const [totalCost, setTotalCost] = useState<number>(0)
   const [firstTxDate, setFirstTxDate] = useState<string>('')
   const [expandedAssetGroups, setExpandedAssetGroups] = useState<Set<string>>(new Set())
 
-  useEffect(() => { refresh(); fetchExtra() }, [])
-  useEffect(() => { if (portfolioId) loadSnapshots(portfolioId, range) }, [range, portfolioId])
+  // İlk açılışta verileri tazele
+  useEffect(() => { 
+    refresh()
+    fetchExtra() 
+  }, [])
+
+  // Range veya portfolioId değiştiğinde snapshot'ları getir (Sayfayı kilitlemeden arka planda yüklenir)
+  useEffect(() => { 
+    if (portfolioId) loadSnapshots(portfolioId, range) 
+  }, [range, portfolioId])
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
@@ -63,7 +71,6 @@ const Analytics = () => {
         setFirstTxDate(snapData[0].snapshot_date)
       }
     }
-    setLoading(false)
   }
 
   const loadSnapshots = async (pid: string, days: number) => {
@@ -106,12 +113,6 @@ const Analytics = () => {
     padding: '20px',
     boxShadow: 'var(--shadow)'
   }
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <p style={{ color: 'var(--text-secondary)' }}>Yükleniyor...</p>
-    </div>
-  )
 
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
