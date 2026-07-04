@@ -99,6 +99,20 @@ const Dashboard = () => {
   }
 
   const getAssetValue = (asset: any) => {
+    const isActiveAsset = (asset: any) => {
+      const quantity = Number(asset.quantity || 0)
+    
+      if (asset.type === 'nakit') {
+        return quantity > 0
+      }
+    
+      if (['bes', 'vadeli'].includes(asset.type)) {
+        return getAssetValue(asset) > 0
+      }
+    
+      return quantity > 0
+    }
+    if (asset.type === 'nakit') return Number(asset.quantity)
     if (asset.type === 'vadeli' && asset.principal && asset.interest_rate) {
       const start = new Date(asset.start_date || asset.created_at)
       const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
@@ -114,6 +128,7 @@ const Dashboard = () => {
   }
 
   const getCostValue = (asset: any) => {
+    if (asset.type === 'nakit') return Number(asset.quantity)
     if (asset.type === 'vadeli' && asset.principal) return Number(asset.principal)
     if (asset.type === 'bes') return getAssetValue(asset)
     const isUSD = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
@@ -121,11 +136,11 @@ const Dashboard = () => {
     const cost = (asset.avg_cost || 0) * Number(asset.quantity)
     return isUSD ? cost * usdRate : cost
   }
-
+  
   const groupByType = () => {
     const groups: Record<string, any> = {}
     assets.filter((asset: any) => {
-      if (['bes', 'vadeli'].includes(asset.type)) return true
+      if (['bes', 'vadeli', 'nakit'].includes(asset.type)) return true
       return Number(asset.quantity) > 0
     }).forEach(asset => {
       const type = asset.type
@@ -142,7 +157,7 @@ const Dashboard = () => {
   }
 
   const pieData = groupByType()
-  const activeAssets = assets.filter((a: any) => ['bes', 'vadeli'].includes(a.type) || Number(a.quantity) > 0)
+  const activeAssets = assets.filter((a: any) => ['bes', 'vadeli', 'nakit'].includes(a.type) || Number(a.quantity) > 0)
   const total = activeAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
   const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a), 0)
   const totalGain = total - totalCost
@@ -222,8 +237,7 @@ const Dashboard = () => {
       <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '24px', marginBottom: '16px', boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}>
         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>Toplam Portföy Değeri</p>
         <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{assets.length} varlık</p>
-
+        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{activeAssets.length} varlık</p>
         {dailyChange !== null && (
           <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '8px 14px', marginTop: '14px' }}>
             <p style={{ fontSize: '13px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
