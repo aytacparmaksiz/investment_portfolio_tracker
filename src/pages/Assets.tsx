@@ -15,11 +15,12 @@ const ASSET_TYPES = [
   { value: 'altin', label: '🥇 Altın', hasSymbol: true, symbolPlaceholder: 'TRYG, CEYREK...', currency: 'TRY' },
   { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
   { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
+  { value: 'nakit', label: '💵 TRY Nakit', hasSymbol: false, currency: 'TRY' },
 ]
 
 const ASSET_LABELS: Record<string, string> = {
   hisse: '🇹🇷 BIST', usd_hisse: '🇺🇸 ABD', kripto: '₿ Kripto',
-  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', bes: '🏦 BES', vadeli: '💰 Vadeli'
+  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', nakit: '💵 Nakit', bes: '🏦 BES', vadeli: '💰 Vadeli'
 }
 
 const Assets = () => {
