@@ -124,7 +124,10 @@ const Dashboard = () => {
 
   const groupByType = () => {
     const groups: Record<string, any> = {}
-    assets.forEach(asset => {
+    assets.filter((asset: any) => {
+      if (['bes', 'vadeli'].includes(asset.type)) return true
+      return Number(asset.quantity) > 0
+    }).forEach(asset => {
       const type = asset.type
       if (!groups[type]) groups[type] = {
         type, label: ASSET_LABELS[type] || type,
@@ -139,8 +142,9 @@ const Dashboard = () => {
   }
 
   const pieData = groupByType()
-  const total = assets.reduce((sum, a) => sum + getAssetValue(a), 0)
-  const totalCost = assets.reduce((sum, a) => sum + getCostValue(a), 0)
+  const activeAssets = assets.filter((a: any) => ['bes', 'vadeli'].includes(a.type) || Number(a.quantity) > 0)
+  const total = activeAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
+  const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a), 0)
   const totalGain = total - totalCost
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
 
