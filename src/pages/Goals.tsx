@@ -238,16 +238,16 @@ const Goals = () => {
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(portfolioTotal)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Durağan Varlıklar </span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Duran Varlıklar </span>
           <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(manualTotal)}</span>
         </div>
       </div>
 
-      {/* Durağan Varlıklar Kartı */}
+      {/* Duran Varlıklar Kartı */}
       <div style={{ ...card, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowAssetList(!showAssetList)}>
-            <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🏠 Durağan Varlıklar</p>
+            <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🏠 Duran Varlıklar</p>
             <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showAssetList ? '▲ Gizle' : '▼ Göster'}</span>
           </div>
           {showAssetList && (
