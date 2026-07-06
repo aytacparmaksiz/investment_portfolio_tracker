@@ -54,6 +54,17 @@ const Assets = () => {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [manualAsset, setManualAsset] = useState<any | null>(null)
+  const [manualForm, setManualForm] = useState({
+    value: '',
+    principal: '',
+    interest_rate: '',
+    maturity_days: '',
+    start_date: new Date().toISOString().split('T')[0]
+  })
+  const [manualSaving, setManualSaving] = useState(false)
+  const [manualError, setManualError] = useState('')
+  
 
   useEffect(() => { fetchData() }, [])
 
@@ -74,7 +85,7 @@ const Assets = () => {
   }
 
   const selectedType = ASSET_TYPES.find(t => t.value === form.type)
-  const isManual = ['bes', 'vadeli'].includes(form.type)
+  const isManual = ['bes', 'vadeli', 'nakit'].includes(form.type)
   const isVadeli = form.type === 'vadeli'
   const isUSD = (type: string) => ['usd_hisse', 'kripto', 'etf'].includes(type)
 
@@ -175,6 +186,14 @@ const Assets = () => {
         await supabase.from('assets').update({
           principal: Number(form.avg_cost),
           avg_cost: Number(form.avg_cost),
+          symbol: null
+        }).eq('id', asset.id)
+      }
+
+      if (form.type === 'nakit') {
+        await supabase.from('assets').update({
+          quantity: Number(form.manual_value),
+          avg_cost: 1,
           symbol: null
         }).eq('id', asset.id)
       }
@@ -282,6 +301,127 @@ const Assets = () => {
     setTimeout(() => setSuccess(''), 3000)
   }
 
+  const openManualUpdateModal = (asset: any) => {
+    const lastManualValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
+    const currentValue =
+      asset.type === 'nakit'
+        ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1)
+        : Number(lastManualValue || asset.principal || 0)
+  
+    setManualAsset(asset)
+    setManualError('')
+    setManualForm({
+      value: currentValue ? String(currentValue) : '',
+      principal: asset.principal ? String(asset.principal) : asset.avg_cost ? String(asset.avg_cost) : '',
+      interest_rate: asset.interest_rate ? String(asset.interest_rate) : '',
+      maturity_days: '',
+      start_date: asset.start_date || new Date().toISOString().split('T')[0]
+    })
+  }
+  
+  const handleManualUpdate = async () => {
+    if (!manualAsset) return
+  
+    setManualError('')
+  
+    if (!manualForm.value) {
+      setManualError('Güncel değer zorunludur.')
+      return
+    }
+  
+    if (manualAsset.type === 'bes' && !manualForm.principal) {
+      setManualError('BES için yatırılan tutar zorunludur.')
+      return
+    }
+  
+    setManualSaving(true)
+  
+    const value = Number(manualForm.value)
+  
+    if (manualAsset.type === 'nakit') {
+      const { error } = await supabase
+        .from('assets')
+        .update({
+          quantity: value,
+          avg_cost: 1,
+          symbol: null
+        })
+        .eq('id', manualAsset.id)
+  
+      if (error) {
+        setManualError(error.message)
+        setManualSaving(false)
+        return
+      }
+    }
+  
+    if (manualAsset.type === 'bes') {
+      await supabase.from('manual_values').insert({
+        asset_id: manualAsset.id,
+        value
+      })
+  
+      const { error } = await supabase
+        .from('assets')
+        .update({
+          principal: Number(manualForm.principal),
+          avg_cost: Number(manualForm.principal),
+          symbol: null
+        })
+        .eq('id', manualAsset.id)
+  
+      if (error) {
+        setManualError(error.message)
+        setManualSaving(false)
+        return
+      }
+    }
+  
+    if (manualAsset.type === 'vadeli') {
+      await supabase.from('manual_values').insert({
+        asset_id: manualAsset.id,
+        value
+      })
+  
+      const updatePayload: any = {
+        principal: value,
+        symbol: null
+      }
+  
+      if (manualForm.interest_rate) {
+        updatePayload.interest_rate = Number(manualForm.interest_rate)
+      }
+  
+      if (manualForm.start_date) {
+        updatePayload.start_date = manualForm.start_date
+      }
+  
+      if (manualForm.maturity_days) {
+        const maturityDate = new Date(manualForm.start_date)
+        maturityDate.setDate(maturityDate.getDate() + Number(manualForm.maturity_days))
+        updatePayload.maturity_date = maturityDate.toISOString().split('T')[0]
+      }
+  
+      const { error } = await supabase
+        .from('assets')
+        .update(updatePayload)
+        .eq('id', manualAsset.id)
+  
+      if (error) {
+        setManualError(error.message)
+        setManualSaving(false)
+        return
+      }
+    }
+  
+    setManualSaving(false)
+    setManualAsset(null)
+    fetchData()
+    refresh(true)
+    setSuccess('Varlık değeri güncellendi!')
+    setTimeout(() => setSuccess(''), 3000)
+  }
+
   // formatCurrency fonksiyonu isHidden kontrolüne göre güncellendi
   const formatCurrency = (val: number, type?: string) => {
     if (isHidden) return '••••••'
@@ -322,6 +462,11 @@ const Assets = () => {
     display: 'block', marginBottom: '6px',
     fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600'
   }
+
+  const visibleAssets = assets.filter((asset: any) => {
+    if (['bes', 'vadeli', 'nakit'].includes(asset.type)) return true
+    return Number(asset.quantity || 0) > 0
+  })
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -441,11 +586,134 @@ const Assets = () => {
         </div>
       )}
 
+      {/* Manuel Varlık Güncelleme Modalı */}
+      {manualAsset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'white', borderRadius: '20px 20px 0 0', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 -8px 32px rgba(0,0,0,0.12)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{manualAsset.name}</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Manuel değer güncelle</p>
+              </div>
+
+              <button
+                onClick={() => setManualAsset(null)}
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {manualAsset.type === 'bes' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Yatırılan Tutar</label>
+                  <input
+                    type="number"
+                    value={manualForm.principal}
+                    onChange={e => setManualForm({ ...manualForm, principal: e.target.value })}
+                    placeholder="150000"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Güncel Değer</label>
+                  <input
+                    type="number"
+                    value={manualForm.value}
+                    onChange={e => setManualForm({ ...manualForm, value: e.target.value })}
+                    placeholder="350000"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            )}
+
+            {manualAsset.type === 'vadeli' && (
+              <>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={labelStyle}>Anapara</label>
+                  <input
+                    type="number"
+                    value={manualForm.value}
+                    onChange={e => setManualForm({ ...manualForm, value: e.target.value })}
+                    placeholder="100000"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Yıllık Faiz (%)</label>
+                    <input
+                      type="number"
+                      value={manualForm.interest_rate}
+                      onChange={e => setManualForm({ ...manualForm, interest_rate: e.target.value })}
+                      placeholder="40"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Vade (Gün)</label>
+                    <input
+                      type="number"
+                      value={manualForm.maturity_days}
+                      onChange={e => setManualForm({ ...manualForm, maturity_days: e.target.value })}
+                      placeholder="30"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={labelStyle}>Başlangıç Tarihi</label>
+                  <input
+                    type="date"
+                    value={manualForm.start_date}
+                    onChange={e => setManualForm({ ...manualForm, start_date: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+              </>
+            )}
+
+            {manualAsset.type === 'nakit' && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>TRY Nakit Tutarı</label>
+                <input
+                  type="number"
+                  value={manualForm.value}
+                  onChange={e => setManualForm({ ...manualForm, value: e.target.value })}
+                  placeholder="50000"
+                  style={inputStyle}
+                />
+              </div>
+            )}
+
+            {manualError && (
+              <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>
+                {manualError}
+              </div>
+            )}
+
+            <button
+              onClick={handleManualUpdate}
+              disabled={manualSaving}
+              style={{ width: '100%', padding: '14px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: manualSaving ? 0.7 : 1 }}
+            >
+              {manualSaving ? 'Güncelleniyor...' : 'Güncelle'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingTop: '16px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Varlıklarım</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{assets.length} varlık</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{visibleAssets.length} varlık</p>
         </div>
         <button onClick={() => setShowForm(!showForm)}
           style={{ padding: '10px 18px', background: showForm ? 'var(--bg-card)' : 'var(--accent)', border: `1px solid ${showForm ? 'var(--border)' : 'var(--accent)'}`, borderRadius: '12px', color: showForm ? 'var(--text-secondary)' : 'white', fontWeight: '700', fontSize: '14px', boxShadow: showForm ? 'var(--shadow)' : '0 4px 12px rgba(99,102,241,0.3)' }}>
@@ -631,7 +899,7 @@ const Assets = () => {
       {/* Varlık Listesi */}
       <div style={card}>
         <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Mevcut Varlıklar</p>
-        {assets.length === 0 ? (
+        {visibleAssets.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
             <p style={{ fontSize: '32px', marginBottom: '8px' }}>📭</p>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Henüz varlık eklenmedi</p>
@@ -642,7 +910,7 @@ const Assets = () => {
             etf: '#B32132', doviz: '#33622C', altin: '#ECC703', vadeli: '#0891b2'
           }
           const groups: Record<string, any[]> = {}
-          assets.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
+          visibleAssets.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
 
           return Object.entries(groups).map(([type, items]) => {
             const typeColor = TYPE_COLORS[type] || '#6b7280'
@@ -675,8 +943,12 @@ const Assets = () => {
                 </div>
 
                 {isExpanded && items.map((asset: any, index: number) => {
-                  const isManualAsset = ['bes', 'vadeli'].includes(asset.type)
+                  const isManualAsset = ['bes', 'vadeli', 'nakit'].includes(asset.type)
                   const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
+                  const manualDisplayValue =
+                    asset.type === 'nakit'
+                      ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1)
+                      : Number(lastValue || asset.principal || 0)
                   return (
                     <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
                       <div>
@@ -688,8 +960,18 @@ const Assets = () => {
                         </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isManualAsset && lastValue && (
-                          <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `₺${Number(lastValue).toLocaleString('tr-TR')}`}</p>
+                        {isManualAsset && manualDisplayValue > 0 && (
+                          <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
+                            {isHidden ? '••••••' : `₺${Number(manualDisplayValue).toLocaleString('tr-TR')}`}
+                          </p>
+                        )}
+                        {isManualAsset && (
+                          <button
+                            onClick={() => openManualUpdateModal(asset)}
+                            style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}
+                          >
+                            Güncelle
+                          </button>
                         )}
                         {!isManualAsset && (
                           <button onClick={() => openTxModal(asset)}
