@@ -6,10 +6,11 @@ export async function addTransaction(
   quantity: number,
   price: number,
   date: string,
-  note?: string
+  note?: string,
+  tryRate?: number,
+  tryTotal?: number
 ) {
-  // İşlemi kaydet
-  const { error } = await supabase.from('transactions').insert({
+  const payload: any = {
     asset_id: assetId,
     type,
     quantity,
@@ -17,11 +18,15 @@ export async function addTransaction(
     total: quantity * price,
     transaction_date: date,
     note: note || null
-  })
+  }
+
+  if (tryRate) payload.try_rate = tryRate
+  if (tryTotal) payload.try_total = tryTotal
+
+  const { error } = await supabase.from('transactions').insert(payload)
 
   if (error) return { error }
 
-  // Asset istatistiklerini güncelle
   const { error: fnError } = await supabase.rpc('update_asset_stats', {
     p_asset_id: assetId
   })
