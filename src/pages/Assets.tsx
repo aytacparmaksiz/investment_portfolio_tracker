@@ -53,6 +53,7 @@ const Assets = () => {
   const [txError, setTxError] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchData() }, [])
 
@@ -287,6 +288,17 @@ const Assets = () => {
     return type && isUSD(type)
       ? `$${Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
       : `₺${Number(val).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
+  }
+  const toggleGroup = (type: string) => {
+    const next = new Set(expandedGroups)
+  
+    if (next.has(type)) {
+      next.delete(type)
+    } else {
+      next.add(type)
+    }
+  
+    setExpandedGroups(next)
   }
 
   const card = {
@@ -634,16 +646,35 @@ const Assets = () => {
 
           return Object.entries(groups).map(([type, items]) => {
             const typeColor = TYPE_COLORS[type] || '#6b7280'
+            const isExpanded = expandedGroups.has(type)
+          
             return (
-              <div key={type} style={{ marginBottom: '18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor }} />
-                  <p style={{ fontWeight: '700', fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {ASSET_LABELS[type]} · {items.length}
-                  </p>
+              <div key={type} style={{ marginBottom: '12px' }}>
+                <div
+                  onClick={() => toggleGroup(type)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    marginBottom: isExpanded ? '10px' : '0',
+                    padding: '10px 0',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor }} />
+                    <p style={{ fontWeight: '700', fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {ASSET_LABELS[type]} · {items.length}
+                    </p>
+                  </div>
+
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: '700' }}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
                 </div>
 
-                {items.map((asset: any, index: number) => {
+                {isExpanded && items.map((asset: any, index: number) => {
                   const isManualAsset = ['bes', 'vadeli'].includes(asset.type)
                   const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
                   return (
