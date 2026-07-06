@@ -59,13 +59,13 @@ const Analytics = () => {
     if (portfolios?.length) {
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
-        .select('total_cost, snapshot_date')
+        .select('total_cost, performance_cost, snapshot_date')
         .eq('portfolio_id', portfolios[0].id)
         .order('snapshot_date', { ascending: true })
         .limit(1)
 
       if (snapData?.length) {
-        setTotalCost(Number(snapData[0].total_cost))
+        setTotalCost(Number(snapData[0].performance_cost || snapData[0].total_cost || 0))
         setFirstTxDate(snapData[0].snapshot_date)
       }
     }
@@ -87,17 +87,36 @@ const Analytics = () => {
     return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })}`
   }
 
-  const chartData = snapshots.map(s => ({
-    date: formatDate(s.snapshot_date),
-    deger: Number(s.total_value),
-    maliyet: Number(s.total_cost),
-    kar: Number(s.total_value) - Number(s.total_cost)
-  }))
+  const chartData = snapshots.map((s: any) => {
+    const performanceValue = Number(s.performance_value || 0)
+    const performanceCost = Number(s.performance_cost || 0)
+  
+    const hasPerformanceData = performanceValue > 0 || performanceCost > 0
+  
+    return {
+      date: formatDate(s.snapshot_date),
+  
+      // Portföy Büyümesi grafiği için
+      deger: Number(s.total_value || 0),
+      maliyet: Number(s.total_cost || 0),
+  
+      // Kar/Zarar Performansı grafiği için
+      performansDeger: hasPerformanceData ? performanceValue : null,
+      performansMaliyet: hasPerformanceData ? performanceCost : null,
+      kar: hasPerformanceData ? performanceValue - performanceCost : null,
+  
+      hasPerformanceData
+    }
+  })
+  
+  const performanceChartData = chartData.filter(d => d.hasPerformanceData)
 
   const first = chartData[0]?.deger || 0
   const last = chartData[chartData.length - 1]?.deger || 0
   const totalGain = last - first
   const totalGainPct = first > 0 ? (totalGain / first) * 100 : 0
+  const latestPerformance = performanceChartData[performanceChartData.length - 1]
+  const latestProfit = Number(latestPerformance?.kar || 0)
 
   const ranges = [
     { label: '7G', value: 7 },
@@ -260,7 +279,7 @@ const Analytics = () => {
                   { label: 'Başlangıç', value: fc(first), color: 'var(--text-primary)' },
                   { label: 'Güncel', value: fc(last), color: 'var(--accent)' },
                   { label: 'Dönem Değişimi', value: isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`, color: totalGain >= 0 ? 'var(--green)' : 'var(--red)', sub: isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${totalGainPct.toFixed(2)}%` },
-                  { label: 'Toplam Kar/Zarar', value: fc(last - (chartData[chartData.length-1]?.maliyet||0)), color: (last - (chartData[chartData.length-1]?.maliyet||0)) >= 0 ? 'var(--green)' : 'var(--red)' },
+                  { label: 'Toplam Kar/Zarar', value: fc(latestProfit), color: latestProfit >= 0 ? 'var(--green)' : 'var(--red)' },
                 ].map((item, i) => (
                   <div key={i} style={{ ...card, padding: '16px' }}>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '6px', textTransform: 'uppercase' as const, fontWeight: '600', letterSpacing: '0.5px' }}>{item.label}</p>
@@ -284,7 +303,10 @@ const Analytics = () => {
               </div>
 
               <div style={{ ...card, marginBottom: '16px' }}>
-                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
+                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>
+                  Portföy Büyümesi
+                </p>
+
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={chartData}>
                     <defs>
@@ -292,37 +314,121 @@ const Analytics = () => {
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                       </linearGradient>
-                      <linearGradient id="colorMaliyet" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
-                      </linearGradient>
                     </defs>
-                    <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(val: any) => fc(val)} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }} />
-                    <Area type="monotone" dataKey="deger" name="Değer" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="maliyet" name="Maliyet" stroke="#9ca3af" fill="url(#colorMaliyet)" strokeWidth={1.5} strokeDasharray="4 4" />
+
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: '#9ca3af', fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+
+                    <YAxis
+                      tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `${(v / 1000).toFixed(0)}K`}
+                    />
+
+                    <Tooltip
+                      formatter={(val: any) => fc(Number(val))}
+                      contentStyle={{
+                        background: 'white',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        fontSize: '12px',
+                        boxShadow: 'var(--shadow-md)'
+                      }}
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="deger"
+                      name="Portföy Değeri"
+                      stroke="#6366f1"
+                      fill="url(#colorDeger)"
+                      strokeWidth={2}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
 
               <div style={{ ...card, marginBottom: '16px' }}>
-                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Kar/Zarar Performansı</p>
-                <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorKar" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#059669" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(val: any) => fc(val)} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }} />
-                    <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
-                    <Area type="monotone" dataKey="kar" name="Kar/Zarar" stroke="#059669" fill="url(#colorKar)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>
+                  Kar/Zarar Performansı
+                </p>
+
+                {performanceChartData.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '32px 0' }}>
+                    Performans verisi henüz oluşmadı.
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={performanceChartData}>
+                      <defs>
+                        <linearGradient id="colorPerformansDeger" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+
+                        <linearGradient id="colorPerformansMaliyet" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.1} />
+                          <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fill: '#9ca3af', fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval="preserveStartEnd"
+                      />
+
+                      <YAxis
+                        tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={v => `${(v / 1000).toFixed(0)}K`}
+                      />
+
+                      <Tooltip
+                        formatter={(val: any) => fc(Number(val))}
+                        contentStyle={{
+                          background: 'white',
+                          border: '1px solid var(--border)',
+                          borderRadius: '10px',
+                          fontSize: '12px',
+                          boxShadow: 'var(--shadow-md)'
+                        }}
+                      />
+
+                      <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+
+                      <Area
+                        type="monotone"
+                        dataKey="performansDeger"
+                        name="Değer"
+                        stroke="#6366f1"
+                        fill="url(#colorPerformansDeger)"
+                        strokeWidth={2}
+                        dot
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="performansMaliyet"
+                        name="Maliyet"
+                        stroke="#9ca3af"
+                        fill="url(#colorPerformansMaliyet)"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        dot
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
 
               {totalCost > 0 && firstTxDate && (

@@ -147,7 +147,8 @@ const Assets = () => {
     setError('')
     if (!form.name) return setError('Varlık adı zorunludur.')
     if (!isManual && !form.quantity) return setError('Adet zorunludur.')
-    if (isManual && !form.manual_value) return setError('Değer zorunludur.')
+    if (form.type === 'bes' && !form.avg_cost) return setError('BES için yatırılan tutar zorunludur.')
+    if (isManual && !form.manual_value) return setError(form.type === 'bes' ? 'BES güncel değeri zorunludur.' : 'Değer zorunludur.')
 
     setSaving(true)
     const { data: asset, error: assetError } = await supabase
@@ -166,8 +167,17 @@ const Assets = () => {
     if (assetError) { setError('Kayıt hatası: ' + assetError.message); setSaving(false); return }
 
     if (isManual) {
-      await supabase.from('manual_values').insert({ asset_id: asset.id, value: Number(form.manual_value) })
 
+      await supabase.from('manual_values').insert({ asset_id: asset.id, value: Number(form.manual_value) })
+      
+      if (form.type === 'bes') {
+        await supabase.from('assets').update({
+          principal: Number(form.avg_cost),
+          avg_cost: Number(form.avg_cost),
+          symbol: null
+        }).eq('id', asset.id)
+      }
+      
       if (isVadeli && form.interest_rate && form.maturity_days) {
         const maturityDate = new Date(form.start_date)
         maturityDate.setDate(maturityDate.getDate() + Number(form.maturity_days))
@@ -496,12 +506,47 @@ const Assets = () => {
           )}
 
           {isManual ? (
-            <div>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>Anapara (₺)</label>
-                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
+
+          <div>
+
+          {form.type === 'bes' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={labelStyle}>Yatırılan Tutar (₺)</label>
+                <input
+                  type="number"
+                  value={form.avg_cost}
+                  onChange={e => setForm({ ...form, avg_cost: e.target.value })}
+                  placeholder="150000"
+                  style={inputStyle}
+                />
               </div>
-              {isVadeli && (
+
+              <div>
+                <label style={labelStyle}>Güncel Değer (₺)</label>
+                <input
+                  type="number"
+                  value={form.manual_value}
+                  onChange={e => setForm({ ...form, manual_value: e.target.value })}
+                  placeholder="350000"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '12px' }}>
+              <label style={labelStyle}>Anapara (₺)</label>
+              <input
+                type="number"
+                value={form.manual_value}
+                onChange={e => setForm({ ...form, manual_value: e.target.value })}
+                placeholder="100000"
+                style={inputStyle}
+              />
+            </div>
+          )}
+
+          {isVadeli && (
                 <div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                     <div>

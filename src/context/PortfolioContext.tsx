@@ -68,25 +68,71 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       setPrices(fetched)
       setLastUpdated(new Date())
 
-      const tv = loaded.reduce((sum: number, a: any) => {
+      const getCurrentValue = (a: any) => {
         if (['bes', 'vadeli'].includes(a.type)) {
           if (a.type === 'vadeli' && a.principal && a.interest_rate) {
             const start = new Date(a.start_date || a.created_at)
-            const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000*60*60*24)))
-            const dailyRate = a.interest_rate / 365 / 100
-            return sum + Number(a.principal) * (1 + dailyRate * days)
+            const days = Math.max(
+              0,
+              Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+            )
+            const dailyRate = Number(a.interest_rate) / 365 / 100
+            return Number(a.principal) * (1 + dailyRate * days)
           }
+      
           const vals = a.manual_values || []
-          return sum + Number(vals[vals.length - 1]?.value || 0)
+          return Number(vals[vals.length - 1]?.value || 0)
         }
+      
         const p = fetched[a.symbol] ?? a.avg_cost ?? 0
-        return sum + p * Number(a.quantity)
+        return Number(p) * Number(a.quantity || 0)
+      }
+      
+      const getCostValue = (a: any) => {
+        if (a.type === 'bes') {
+          return Number(a.principal ?? a.avg_cost ?? 0)
+        }
+      
+        if (a.type === 'vadeli') {
+          return Number(a.principal ?? 0)
+        }
+      
+        return Number(a.avg_cost || 0) * Number(a.quantity || 0)
+      }
+      
+      const isPerformanceAsset = (a: any) => {
+        // TRY nakit kar/zarar performansına dahil edilmez
+        if (['nakit', 'try', 'TRY'].includes(a.type)) return false
+      
+        // BES sadece maliyet girildiyse performansa dahil edilir
+        if (a.type === 'bes') {
+          return Number(a.principal ?? a.avg_cost ?? 0) > 0
+        }
+      
+        return true
+      }
+      
+      const tv = loaded.reduce((sum: number, a: any) => {
+        return sum + getCurrentValue(a)
       }, 0)
+      
       const tc = loaded.reduce((sum: number, a: any) => {
+        // Portföy Büyümesi grafiğindeki maliyet çizgisi mevcut mantıkla devam etsin
         if (['bes', 'vadeli'].includes(a.type)) return sum
-        return sum + (a.avg_cost || 0) * Number(a.quantity)
+        return sum + getCostValue(a)
       }, 0)
-      await saveSnapshot(portfolios[0].id, tv, tc)
+      
+      const performanceValue = loaded.reduce((sum: number, a: any) => {
+        if (!isPerformanceAsset(a)) return sum
+        return sum + getCurrentValue(a)
+      }, 0)
+      
+      const performanceCost = loaded.reduce((sum: number, a: any) => {
+        if (!isPerformanceAsset(a)) return sum
+        return sum + getCostValue(a)
+      }, 0)
+      
+      await saveSnapshot(portfolios[0].id, tv, tc, performanceValue, performanceCost)
       setPricesLoading(false)
     }
   }, [user, hasFetched])
