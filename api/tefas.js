@@ -20,42 +20,53 @@ export default async function handler(req, res) {
     const setCookieHeader = pageResponse.headers.get('set-cookie') || '';
     const cookies = setCookieHeader.split(',').map(c => c.split(';')[0]).join('; ');
 
-    // 2. Adım: Alınan cookie ile asıl veri isteğini yap
-    const params = new URLSearchParams({
-      fontip: 'YAT',
-      sfontur: '',
-      fonkod: fundCode,
-      fongrup: '',
-      bastarih: startDate,
-      bittarih: endDate,
-      fonturkod: '',
-      fonunvantip: '',
-    });
+// 2. Adım: Alınan cookie ile veriyi çek — fon tipini otomatik dene (YAT / EMK / BYF)
+const fundTypes = ['YAT', 'EMK', 'BYF'];
+let raw = { data: [] };
+let triedType = null;
 
-    const response = await fetch('https://www.tefas.gov.tr/api/DB/BindHistoryInfo', {
-      method: 'POST',
-      headers: {
-        ...browserHeaders,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Origin': 'https://www.tefas.gov.tr',
-        'Referer': 'https://www.tefas.gov.tr/TarihselVeriler.aspx',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cookie': cookies,
-      },
-      body: params,
-    });
+for (const fontip of fundTypes) {
+  const params = new URLSearchParams({
+    fontip,
+    sfontur: '',
+    fonkod: fundCode,
+    fongrup: '',
+    bastarih: startDate,
+    bittarih: endDate,
+    fonturkod: '',
+    fonunvantip: '',
+  });
 
-    const raw = await response.json();
+  const response = await fetch('https://www.tefas.gov.tr/api/DB/BindHistoryInfo', {
+    method: 'POST',
+    headers: {
+      ...browserHeaders,
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Origin': 'https://www.tefas.gov.tr',
+      'Referer': 'https://www.tefas.gov.tr/TarihselVeriler.aspx',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Cookie': cookies,
+    },
+    body: params,
+  });
 
-    const prices = (raw.data || []).map((item) => ({
-      date: item.TARIH,
-      price: parseFloat(item.FIYAT),
-      code: item.FONKODU,
-      title: item.FONUNVAN,
-    }));
+  const result = await response.json();
+  triedType = fontip;
+  if (result?.data?.length > 0) {
+    raw = result;
+    break;
+  }
+}
 
-    res.status(200).json({ prices, debug: { cookiesReceived: !!cookies, rawCount: (raw.data || []).length } });
+const prices = (raw.data || []).map((item) => ({
+  date: item.TARIH,
+  price: parseFloat(item.FIYAT),
+  code: item.FONKODU,
+  title: item.FONUNVAN,
+}));
+
+res.status(200).json({ prices, debug: { cookiesReceived: !!cookies, rawCount: (raw.data || []).length, matchedType: raw.data?.length ? triedType : null } });
   } catch (err) {
     res.status(500).json({ error: 'TEFAS verisi alınamadı', detail: err.message });
   }
