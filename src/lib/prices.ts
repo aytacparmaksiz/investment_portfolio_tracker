@@ -1,5 +1,6 @@
 const COINGECKO = 'https://api.coingecko.com/api/v3'
 const API_BASE = 'https://kumbaram-three.vercel.app/api/price'
+const TEFAS_API = 'https://kumbaram-three.vercel.app/api/tefas'
 
 const CRYPTO_IDS: Record<string, string> = {
   BTC: 'bitcoin',
@@ -33,6 +34,39 @@ export async function fetchCryptoPrice(symbol: string): Promise<number | null> {
     const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try`)
     const data = await res.json()
     return data?.[id]?.try ?? null
+  } catch {
+    return null
+  }
+}
+
+function formatDateTR(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0')
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const y = date.getFullYear()
+  return `${d}.${m}.${y}`
+}
+
+export async function fetchFundPrice(fundCode: string): Promise<number | null> {
+  try {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(start.getDate() - 10) // hafta sonu/tatil için 10 günlük tampon
+
+    const params = new URLSearchParams({
+      fundCode: fundCode.toUpperCase(),
+      startDate: formatDateTR(start),
+      endDate: formatDateTR(end),
+    })
+
+    const res = await fetch(`${TEFAS_API}?${params}`)
+    const data = await res.json()
+    const prices = data?.prices || []
+    if (!prices.length) return null
+
+    const sorted = [...prices].sort(
+      (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+    return sorted[0]?.price ?? null
   } catch {
     return null
   }
@@ -95,6 +129,10 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
           prices[sym] = xauPrice * usdtry
         }
       }
+
+    } else if (asset.type === 'fon') {
+      const price = await fetchFundPrice(sym)
+      if (price) prices[sym] = price
     }
   }))
 

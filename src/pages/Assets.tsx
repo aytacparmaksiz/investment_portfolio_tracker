@@ -13,6 +13,7 @@ const ASSET_TYPES = [
   { value: 'etf', label: '📈 ETF', hasSymbol: true, symbolPlaceholder: 'SPY, QQQ...', currency: 'USD' },
   { value: 'doviz', label: '💱 Döviz', hasSymbol: true, symbolPlaceholder: 'USD, EUR, GBP...', currency: 'TRY' },
   { value: 'altin', label: '🥇 Altın', hasSymbol: true, symbolPlaceholder: 'TRYG, CEYREK...', currency: 'TRY' },
+  { value: 'fon', label: '📊 TEFAS Fon', hasSymbol: true, symbolPlaceholder: 'TP2, AFT...', currency: 'TRY' },
   { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
   { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
   { value: 'nakit', label: '💵 TRY Nakit', hasSymbol: false, currency: 'TRY' },
@@ -20,7 +21,7 @@ const ASSET_TYPES = [
 
 const ASSET_LABELS: Record<string, string> = {
   hisse: '🇹🇷 BIST', usd_hisse: '🇺🇸 ABD', kripto: '₿ Kripto',
-  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', nakit: '💵 Nakit', bes: '🏦 BES', vadeli: '💰 Vadeli'
+  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 Fon', nakit: '💵 Nakit', bes: '🏦 BES', vadeli: '💰 Vadeli'
 }
 
 const Assets = () => {
@@ -121,6 +122,11 @@ const Assets = () => {
         m.name.toLowerCase().includes(value.toLowerCase())
       )
       setSearchResults(filtered.map(m => ({ ...m, type: 'METAL', exchange: 'TR' })))
+      return
+    }
+
+    if (form.type === 'fon') {
+      setSearchResults([])
       return
     }
 

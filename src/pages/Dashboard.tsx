@@ -9,7 +9,7 @@ const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed'
 
 const ASSET_LABELS: Record<string, string> = {
   hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: 'Kripto',
-  etf: 'ETF', doviz: 'Döviz', altin: 'Altın', bes: 'BES', vadeli: 'Vadeli Mevduat', nakit: 'Nakit'
+  etf: 'ETF', doviz: 'Döviz', altin: 'Altın', fon: 'TEFAS Fon', bes: 'BES', vadeli: 'Vadeli Mevduat', nakit: 'Nakit'
 }
 
 const Dashboard = () => {
