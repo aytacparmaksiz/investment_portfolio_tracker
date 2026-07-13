@@ -6,10 +6,14 @@ export default async function handler(req, res) {
     }
   
     const params = new URLSearchParams({
-      fontip: 'YAT',
+      fontip: 'YAT', // YAT: yatırım fonu, EMK: emeklilik fonu
+      sfontur: '',
       fonkod: fundCode,
+      fongrup: '',
       bastarih: startDate, // format: GG.AA.YYYY
       bittarih: endDate,   // format: GG.AA.YYYY
+      fonturkod: '',
+      fonunvantip: '',
     });
   
     try {
@@ -19,10 +23,11 @@ export default async function handler(req, res) {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Origin': 'https://www.tefas.gov.tr',
           'Referer': 'https://www.tefas.gov.tr/TarihselVeriler.aspx',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         },
         body: params,
       });
-  
+      
       const raw = await response.json();
   
       const prices = (raw.data || []).map((item) => ({
