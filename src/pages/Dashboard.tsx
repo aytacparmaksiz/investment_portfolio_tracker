@@ -24,6 +24,7 @@ const Dashboard = () => {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [dailyChange, setDailyChange] = useState<number | null>(null)
+  const [dailyChangePct, setDailyChangePct] = useState(0)
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -31,25 +32,39 @@ const Dashboard = () => {
 
   useEffect(() => {
     const calcDaily = async () => {
-      if (!portfolioId || assets.length === 0) return
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yStr = yesterday.toISOString().split('T')[0]
-
-      const { data: ySnap } = await supabase
+      if (!portfolioId) return
+  
+      const { data, error } = await supabase
         .from('portfolio_snapshots')
-        .select('total_value')
+        .select('snapshot_date,total_value,created_at')
         .eq('portfolio_id', portfolioId)
-        .eq('snapshot_date', yStr)
-        .single()
-
-      if (ySnap) {
-        const todayVal = assets.reduce((sum: number, a: any) => sum + getAssetValue(a), 0)
-        setDailyChange(todayVal - Number(ySnap.total_value))
-      }
+        .order('snapshot_date', { ascending: false })
+        .order('created_at', { ascending: false })
+  
+      if (error || !data || data.length < 2) return
+  
+      const latestDate = data[0].snapshot_date
+  
+      const latest = data.find(d => d.snapshot_date === latestDate)
+      const previous = data.find(d => d.snapshot_date !== latestDate)
+  
+      if (!latest || !previous) return
+  
+      const change =
+        Number(latest.total_value) -
+        Number(previous.total_value)
+  
+      setDailyChange(change)
+  
+      setDailyChangePct(
+        Number(previous.total_value) > 0
+          ? (change / Number(previous.total_value)) * 100
+          : 0
+      )
     }
+  
     calcDaily()
-  }, [assets, prices, portfolioId])
+  }, [portfolioId, refreshing])
 
   useEffect(() => {
     let startY = 0
@@ -239,10 +254,44 @@ const Dashboard = () => {
         <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{activeAssets.length} varlık</p>
         {dailyChange !== null && (
-          <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '8px 14px', marginTop: '14px' }}>
-            <p style={{ fontSize: '13px', fontWeight: '700', color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5' }}>
-              Bugün {dailyChange >= 0 ? '+' : ''}{fc(dailyChange)}
-            </p>
+          <div
+            style={{
+              display: 'inline-flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginTop: '14px',
+              background: 'rgba(255,255,255,0.15)',
+              borderRadius: '10px',
+              padding: '8px 14px'
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5',
+                fontWeight: 700
+              }}
+            >
+              <span>{dailyChange >= 0 ? '▲' : '▼'}</span>
+
+              <span>{fc(Math.abs(dailyChange))}</span>
+
+              <span>
+                ({dailyChangePct >= 0 ? '+' : ''}
+                {dailyChangePct.toFixed(2)}%)
+              </span>
+            </div>
+
+            <div
+              style={{
+                marginTop: '2px',
+                fontSize: '11px',
+                color: 'rgba(255,255,255,.75)'
+              }}
+            >
+            </div>
           </div>
         )}
 
