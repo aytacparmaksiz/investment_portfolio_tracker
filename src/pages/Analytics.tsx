@@ -36,7 +36,7 @@ const Analytics = () => {
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
       const usdRateLocal = prices['USDTRY=X'] || 46.4
-      const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type))
+      const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
       const groups: Record<string, any[]> = {}
       filtered.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
       const sorted = Object.entries(groups).sort((a, b) => {
@@ -153,7 +153,7 @@ const Analytics = () => {
           hisse: '#35D6ED', usd_hisse: '#1A224C', kripto: '#8b5cf6',
           etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2'
         }
-        const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type))
+        const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
         const groups: Record<string, any[]> = {}
         filtered.forEach(a => {
           if (!groups[a.type]) groups[a.type] = []
