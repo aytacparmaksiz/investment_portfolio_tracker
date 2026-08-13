@@ -226,8 +226,8 @@ const Assets = () => {
           setSaving(false)
           return
         }
-        const tryAmount = Number(form.avg_cost)
-        const usdPrice = (tryAmount / currentRate) / Number(form.quantity)
+        const usdPrice = Number(form.avg_cost)
+        const tryAmount = usdPrice * Number(form.quantity) * currentRate
         await addTransaction(asset.id, 'buy', Number(form.quantity), usdPrice, form.txDate, undefined, currentRate, tryAmount)
       } else {
         await addTransaction(asset.id, 'buy', Number(form.quantity), Number(form.avg_cost), form.txDate)
@@ -265,11 +265,7 @@ const Assets = () => {
     setTxError('')
     const usdType = isUSD(txAsset.type)
 
-    if (usdType) {
-      if (!txForm.quantity || !txForm.tryTotal) return setTxError('Adet ve TRY tutarı zorunludur.')
-    } else {
-      if (!txForm.quantity || !txForm.price) return setTxError('Adet ve fiyat zorunludur.')
-    }
+    if (!txForm.quantity || !txForm.price) return setTxError('Adet ve fiyat zorunludur.')
     if (txType === 'sell' && Number(txForm.quantity) > Number(txAsset.quantity)) {
       return setTxError(`Maksimum satılabilir: ${txAsset.quantity}`)
     }
@@ -280,7 +276,6 @@ const Assets = () => {
     let tryTotal: number | undefined
 
     if (usdType) {
-      tryTotal = Number(txForm.tryTotal)
       const historicalRate = await fetchHistoricalRate(txForm.date)
       const currentUsdRate = historicalRate || prices['USDTRY=X'] || (txForm.manualRate ? Number(txForm.manualRate) : null)
       if (!currentUsdRate) {
@@ -289,10 +284,9 @@ const Assets = () => {
         setTxSaving(false)
         return
       }
-      finalPrice = (tryTotal / currentUsdRate) / Number(txForm.quantity)
       tryRate = currentUsdRate
+      tryTotal = finalPrice * Number(txForm.quantity) * currentUsdRate
     }
-
     const { error } = await addTransaction(txAsset.id, txType, Number(txForm.quantity), finalPrice, txForm.date, txForm.note, tryRate, tryTotal)
     if (error) { setTxError('Hata: ' + error.message); setTxSaving(false); return }
 
@@ -516,10 +510,10 @@ const Assets = () => {
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>
-                      {txType === 'buy' ? 'Ödediğin TRY' : 'Aldığın TRY'}
+                      Birim Fiyat ($)
                     </label>
-                    <input type="number" value={txForm.tryTotal} onChange={e => setTxForm({ ...txForm, tryTotal: e.target.value })}
-                      placeholder="örn. 24200" style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
+                    <input type="number" value={txForm.price} onChange={e => setTxForm({ ...txForm, price: e.target.value })}
+                      placeholder="örn. 242" style={{ width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                   </div>
                 </div>
                 {txRateNotFound && (
@@ -860,8 +854,8 @@ const Assets = () => {
                     <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Ödediğin Toplam TRY</label>
-                    <input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="24000" style={inputStyle} />
+                    <label style={labelStyle}>Birim Fiyat ($)</label>
+                    <input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="240" style={inputStyle} />
                   </div>
                 </div>
                 <div style={{ marginBottom: '12px' }}>
