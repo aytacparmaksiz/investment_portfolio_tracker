@@ -68,6 +68,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       setPrices(fetched)
       setLastUpdated(new Date())
 
+      const usdtry = fetched['USDTRY=X'] || 46.4
+
       const getCurrentValue = (a: any) => {
         if (['bes', 'vadeli'].includes(a.type)) {
           if (a.type === 'vadeli' && a.principal && a.interest_rate) {
@@ -95,6 +97,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       
         if (a.type === 'vadeli') {
           return Number(a.principal ?? 0)
+        }
+
+        const isUsdType = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
+        if (isUsdType) {
+          if (a.total_try_cost) return Number(a.total_try_cost)
+          return Number(a.avg_cost || 0) * Number(a.quantity || 0) * usdtry
         }
       
         return Number(a.avg_cost || 0) * Number(a.quantity || 0)
