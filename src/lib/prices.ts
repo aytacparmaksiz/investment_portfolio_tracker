@@ -27,13 +27,16 @@ async function fetchPrice(symbol: string): Promise<number | null> {
   }
 }
 
-export async function fetchCryptoPrice(symbol: string): Promise<number | null> {
+export async function fetchCryptoPrice(symbol: string): Promise<{ try: number; usd: number } | null> {
   try {
     const id = CRYPTO_IDS[symbol.toUpperCase()]
     if (!id) return null
-    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try`)
+    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd`)
     const data = await res.json()
-    return data?.[id]?.try ?? null
+    const tryPrice = data?.[id]?.try
+    const usdPrice = data?.[id]?.usd
+    if (!tryPrice || !usdPrice) return null
+    return { try: tryPrice, usd: usdPrice }
   } catch {
     return null
   }
@@ -96,8 +99,11 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
       if (usdPrice) prices[sym] = usdPrice * usdtry
 
     } else if (asset.type === 'kripto') {
-      const price = await fetchCryptoPrice(sym)
-      if (price) prices[sym] = price
+      const cryptoPrice = await fetchCryptoPrice(sym)
+      if (cryptoPrice) {
+        prices[sym] = cryptoPrice.try
+        prices[sym + '_usd'] = cryptoPrice.usd
+      }
 
     } else if (asset.type === 'doviz') {
       const dovizMap: Record<string, string> = {

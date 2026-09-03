@@ -208,7 +208,7 @@ const Analytics = () => {
                       : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
                     
                     const unitPriceDisplay = isHidden ? '••••••' : (isUSD
-                      ? `$${(livePrice / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                      ? `$${(prices[asset.symbol + '_usd'] ?? (livePrice / usdRate)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                       : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
 
                     return (
