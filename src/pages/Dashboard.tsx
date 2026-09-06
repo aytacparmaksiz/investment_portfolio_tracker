@@ -180,9 +180,11 @@ const Dashboard = () => {
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
+    if (displayCurrency === 'USD') {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val / usdRate)
+    }
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
-
   const fp = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
 
   if (loading) return (

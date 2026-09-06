@@ -80,6 +80,7 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
 
   // Önce USD/TRY kuru al
   const usdtry = await fetchPrice('USDTRY=X') ?? 38
+  prices['USDTRY=X'] = usdtry
 
   await Promise.all(assets.map(async (asset) => {
     if (!asset.symbol) return
