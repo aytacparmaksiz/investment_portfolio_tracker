@@ -30,10 +30,12 @@ const Goals = () => {
 
   const [showSavingForm, setShowSavingForm] = useState(false)
   const [showManageSavings, setShowManageSavings] = useState(false)
+  const [savingType, setSavingType] = useState<'giris' | 'cekim'>('giris')
   const [savingForm, setSavingForm] = useState({ 
     month: new Date().toISOString().slice(0, 7), 
     amount_try: '',
-    income_try: '' 
+    income_try: '',
+    note: ''
   })
 
   // Çizginin üzerindeki oran etiketleri (Bileşen içine alınarak global isHidden state'ine bağlandı)
@@ -159,7 +161,8 @@ const Goals = () => {
     const donemGetirisiPct = (V1_usd - V0_usd - D_usd) / V0_usd
     const aylikGetiri = Math.pow(1 + donemGetirisiPct, 30 / gunSayisi) - 1
 
-    const avgMonthlySaving_usd = windowSavings.length > 0 ? D_usd / windowSavings.length : 0
+    const distinctMonthCount = new Set(windowSavings.map(s => String(s.month).slice(0, 7))).size
+    const avgMonthlySaving_usd = distinctMonthCount > 0 ? D_usd / distinctMonthCount : 0
     const avgMonthlySaving = avgMonthlySaving_usd * usdRate // TRY karşılığı, gösterim için
 
     const monthlyExpense = Number(monthlyExpenseUSD) || 0
@@ -220,27 +223,24 @@ const Goals = () => {
   }
 
   const handleAddSaving = async () => {
-    if (!savingForm.amount_try || !savingForm.income_try) return
+    if (!savingForm.amount_try) return
+    if (savingType === 'giris' && !savingForm.income_try) return
     const monthDate = savingForm.month + '-01'
-    
-    const payload = {
-      amount_try: Number(savingForm.amount_try),
-      income_try: Number(savingForm.income_try)
-    }
 
-    const { data: existing } = await supabase
-      .from('savings').select('id').eq('portfolio_id', portfolioId).eq('month', monthDate).single()
+    const finalAmount = savingType === 'cekim'
+      ? -Math.abs(Number(savingForm.amount_try))
+      : Number(savingForm.amount_try)
 
-    if (existing) {
-      await supabase.from('savings').update(payload).eq('id', existing.id)
-    } else {
-      await supabase.from('savings').insert({
-        portfolio_id: portfolioId,
-        month: monthDate,
-        ...payload
-      })
-    }
-    setSavingForm({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '' })
+    await supabase.from('savings').insert({
+      portfolio_id: portfolioId,
+      month: monthDate,
+      amount_try: finalAmount,
+      income_try: savingType === 'cekim' ? 0 : Number(savingForm.income_try),
+      note: savingForm.note || (savingType === 'cekim' ? 'Çekim' : null)
+    })
+
+    setSavingForm({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '', note: '' })
+    setSavingType('giris')
     setShowSavingForm(false)
     fetchData()
   }
@@ -256,19 +256,26 @@ const Goals = () => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
   
-  const chartData = savings.map(s => {
-    const gelir = Number(s.income_try || 0)
-    const tasarruf = Number(s.amount_try || 0)
-    const oran = gelir > 0 ? (tasarruf / gelir) * 100 : 0
-
-    return {
-      id: s.id,
-      month: new Date(s.month).toLocaleString('tr-TR', { month: 'short', year: '2-digit' }),
-      tasarruf,
-      gelir,
-      oran
-    }
+  const monthlyTotals: Record<string, { gelir: number; tasarruf: number; monthDate: string }> = {}
+  savings.forEach(s => {
+    const key = String(s.month).slice(0, 10)
+    if (!monthlyTotals[key]) monthlyTotals[key] = { gelir: 0, tasarruf: 0, monthDate: key }
+    monthlyTotals[key].gelir += Number(s.income_try || 0)
+    monthlyTotals[key].tasarruf += Number(s.amount_try || 0)
   })
+
+  const chartData = Object.values(monthlyTotals)
+    .sort((a, b) => a.monthDate.localeCompare(b.monthDate))
+    .map(m => {
+      const oran = m.gelir > 0 ? (m.tasarruf / m.gelir) * 100 : 0
+      return {
+        id: m.monthDate,
+        month: new Date(m.monthDate).toLocaleString('tr-TR', { month: 'short', year: '2-digit' }),
+        tasarruf: m.tasarruf,
+        gelir: m.gelir,
+        oran
+      }
+    })
 
   const card = {
     background: 'var(--bg-card)',
@@ -514,51 +521,77 @@ const Goals = () => {
 
         {showSavingForm && (
           <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
+
+            <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', marginBottom: '14px', border: '1px solid var(--border)' }}>
+              <button onClick={() => setSavingType('giris')}
+                style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'giris' ? '#10b981' : 'none', color: savingType === 'giris' ? 'white' : 'var(--text-secondary)' }}>
+                ↑ Giriş
+              </button>
+              <button onClick={() => setSavingType('cekim')}
+                style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'cekim' ? 'var(--red)' : 'none', color: savingType === 'cekim' ? 'white' : 'var(--text-secondary)' }}>
+                ↓ Çekim
+              </button>
+            </div>
+
             <div style={{ marginBottom: '10px' }}>
               <label style={labelStyle}>Ay</label>
               <input type="month" value={savingForm.month} onChange={e => setSavingForm({ ...savingForm, month: e.target.value })} style={inputStyle} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-              <div>
-                <label style={labelStyle}>Aylık Gelir (₺)</label>
-                <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="220000" style={inputStyle} />
+
+            {savingType === 'giris' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <label style={labelStyle}>Bu Girişteki Gelir (₺)</label>
+                  <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="76000" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Bu Girişteki Tasarruf (₺)</label>
+                  <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="60000" style={inputStyle} />
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>Tasarruf Tutarı (₺)</label>
-                <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="100000" style={inputStyle} />
+            ) : (
+              <div style={{ marginBottom: '10px' }}>
+                <label style={labelStyle}>Çekim Tutarı (₺)</label>
+                <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="10000" style={{ ...inputStyle, border: '1px solid var(--red)' }} />
               </div>
+            )}
+
+            <div style={{ marginBottom: '10px' }}>
+              <label style={labelStyle}>Not (opsiyonel)</label>
+              <input value={savingForm.note} onChange={e => setSavingForm({ ...savingForm, note: e.target.value })} placeholder={savingType === 'cekim' ? 'örn. Acil ihtiyaç' : 'örn. Avans'} style={inputStyle} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-              <div>
-                <label style={labelStyle}>Aylık Gelir (₺)</label>
-                <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="220000" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Tasarruf Tutarı (₺)</label>
-                <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="100000" style={inputStyle} />
-              </div>
-            </div>
+
+            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              Aynı ay için birden fazla giriş ekleyebilirsin — hepsi toplanarak dikkate alınır.
+            </p>
+
             <button onClick={handleAddSaving}
-              style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
-              Kaydet
+              style={{ width: '100%', padding: '10px', background: savingType === 'cekim' ? 'var(--red)' : 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
+              {savingType === 'cekim' ? 'Çekimi Kaydet' : 'Ekle'}
             </button>
           </div>
         )}
 
-        {showManageSavings && chartData.length > 0 && (
-          <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px', maxHeight: '160px', overflowY: 'auto' }}>
-            <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase' }}>Kayıtlı Ayları Sil</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-              {chartData.map(s => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px 10px', fontSize: '12px' }}>
-                  <span style={{ fontWeight: '600' }}>{s.month}</span>
+        {showManageSavings && savings.length > 0 && (
+          <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px', maxHeight: '220px', overflowY: 'auto' }}>
+            <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase' }}>Girişleri Sil</p>
+            {[...savings]
+              .sort((a, b) => String(a.month).localeCompare(String(b.month)) || String(a.created_at).localeCompare(String(b.created_at)))
+              .map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', marginBottom: '6px' }}>
+                  <div>
+                    <span style={{ fontWeight: '700' }}>{new Date(s.month).toLocaleString('tr-TR', { month: 'short', year: '2-digit' })}</span>
+                    <span style={{ color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                      {fc(Number(s.amount_try))} / {fc(Number(s.income_try))}
+                    </span>
+                    {s.note && <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px' }}>· {s.note}</span>}
+                  </div>
                   <button onClick={() => handleDeleteSaving(s.id)} 
-                    style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px' }}>
+                    style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px', flexShrink: 0 }}>
                     ✕
                   </button>
                 </div>
               ))}
-            </div>
           </div>
         )}
 
