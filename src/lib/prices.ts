@@ -15,7 +15,10 @@ const CRYPTO_IDS: Record<string, string> = {
   ADA: 'cardano',
   LINK: 'chainlink',
   LTC: 'litecoin',
+  // Yeni eklenen Pharaoh Liquid Staking Token
+  P33: 'pharaoh-liquid-staking-token',
 }
+
 
 async function fetchPrice(symbol: string): Promise<number | null> {
   try {
