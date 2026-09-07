@@ -204,7 +204,7 @@ const Analytics = () => {
                     
                     // Ham birim verilerini gizlilik durumuna göre şartlandırdık
                     const unitCostDisplay = isHidden ? '••••••' : (isUSD
-                      ? `$${((costValueTRY / Number(asset.quantity || 1)) / usdRate).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                      ? `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                       : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
                     
                     const unitPriceDisplay = isHidden ? '••••••' : (isUSD

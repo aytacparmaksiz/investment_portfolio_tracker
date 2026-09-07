@@ -562,10 +562,39 @@ const Goals = () => {
           </div>
         )}
 
-        {chartData.length === 0 ? (
+{chartData.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>Henüz tasarruf kaydı yok</p>
         ) : (
           <>
+            {(() => {
+              const currentYear = String(new Date().getFullYear())
+              const ytdSavings = savings.filter(s => String(s.month).slice(0, 4) === currentYear)
+              const ytdCount = ytdSavings.length
+              const ytdAvgAmount = ytdCount > 0
+                ? ytdSavings.reduce((sum, s) => sum + Number(s.amount_try || 0), 0) / ytdCount
+                : 0
+              const ytdTotalIncome = ytdSavings.reduce((sum, s) => sum + Number(s.income_try || 0), 0)
+              const ytdTotalSaving = ytdSavings.reduce((sum, s) => sum + Number(s.amount_try || 0), 0)
+              const ytdAvgRate = ytdTotalIncome > 0 ? (ytdTotalSaving / ytdTotalIncome) * 100 : 0
+
+              if (ytdCount === 0) return null
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                  <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
+                    <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Ortalama Tasarruf</p>
+                    <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(ytdAvgAmount)}</p>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{currentYear} · {ytdCount} ay</p>
+                  </div>
+                  <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
+                    <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Ortalama Oran</p>
+                    <p style={{ fontSize: '15px', fontWeight: '800', color: '#10b981' }}>%{isHidden ? '••' : ytdAvgRate.toFixed(1)}</p>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>gelire oranla</p>
+                  </div>
+                </div>
+              )
+            })()}
+
             <ResponsiveContainer width="100%" height={260}>
               {/* barGap={-28} verilerek barların tam arkalı önlü çakışması sağlandı */}
               <ComposedChart data={chartData} barGap={-28} margin={{ top: 20, right: -10, left: -15, bottom: 5 }}>
