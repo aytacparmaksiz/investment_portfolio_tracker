@@ -43,3 +43,17 @@ export async function fetchTransactions(assetId: string) {
 
   return data || []
 }
+
+export async function deleteTransaction(transactionId: string, assetId: string) {
+  // 1. İşlemi sil
+  const { error } = await supabase.from('transactions').delete().eq('id', transactionId)
+  
+  if (error) return { error }
+
+  // 2. Varlık istatistiklerini (adet, ortalama maliyet) yeniden hesapla
+  const { error: fnError } = await supabase.rpc('update_asset_stats', {
+    p_asset_id: assetId
+  })
+
+  return { error: fnError }
+}

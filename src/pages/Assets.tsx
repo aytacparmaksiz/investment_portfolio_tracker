@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { addTransaction, fetchTransactions } from '../lib/transactions'
+import { addTransaction, fetchTransactions, deleteTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -301,6 +301,30 @@ const Assets = () => {
     setTimeout(() => setSuccess(''), 3000)
   }
 
+  const handleDeleteTx = async (txId: string) => {
+    if (!confirm('Bu işlemi silmek istediğinize emin misiniz? Ortalama maliyet yeniden hesaplanacak.')) return
+    
+    setTxSaving(true)
+    setTxError('')
+  
+    const { error } = await deleteTransaction(txId, txAsset.id)
+    
+    if (error) { 
+      setTxError('Silme hatası: ' + error.message)
+      setTxSaving(false)
+      return 
+    }
+  
+    // İşlem geçmişini ve ana tabloyu güncelle
+    const history = await fetchTransactions(txAsset.id)
+    setTxHistory(history)
+    fetchData()
+    refresh(true)
+    setTxSaving(false)
+    setSuccess('İşlem silindi ve maliyet güncellendi.')
+    setTimeout(() => setSuccess(''), 3000)
+  }
+
   const openManualUpdateModal = (asset: any) => {
     const lastManualValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
     const currentValue =
@@ -574,9 +598,19 @@ const Assets = () => {
                       </div>
                       {tx.note && <p style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{tx.note}</p>}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteTx(tx.id)}
+                        disabled={txSaving}
+                        style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }}
+                        title="İşlemi Sil"
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
                 ))}
