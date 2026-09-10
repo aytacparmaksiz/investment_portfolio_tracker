@@ -29,6 +29,7 @@ const Goals = () => {
   const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
 
   const [showSavingForm, setShowSavingForm] = useState(false)
+  const [fireMode, setFireMode] = useState<'dinamik' | 'sabit'>('dinamik')
   const [showManageSavings, setShowManageSavings] = useState(false)
   const [savingType, setSavingType] = useState<'giris' | 'cekim'>('giris')
   const [savingForm, setSavingForm] = useState({ 
@@ -56,18 +57,16 @@ const Goals = () => {
 
   useEffect(() => {
     const loadRates = async () => {
-      if (snapshots.length === 0) return
-      const priorSnaps = snapshots.filter(s => s.snapshot_date < GROWTH_WINDOW_START_DATE)
-      const startSnap = priorSnaps.length > 0
-        ? priorSnaps[priorSnaps.length - 1]
-        : snapshots.find(s => s.snapshot_date >= GROWTH_WINDOW_START_DATE)
-      if (!startSnap) return
+      const besAnchorDate = '2023-09-01' // BES için tahmini 3 yıl öncesi
+      const earliestNonBes = assets.filter(a => a.type !== 'bes').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
+      const otherAnchorDate = earliestNonBes ? earliestNonBes.created_at.split('T')[0] : '2026-04-01' // Nisan veya ilk varlık tarihi
 
       const startMonth = GROWTH_WINDOW_START_DATE.slice(0, 7)
       const windowSavings = savings.filter(s => String(s.month).slice(0, 7) >= startMonth)
 
       const datesToFetch = Array.from(new Set([
-        startSnap.snapshot_date,
+        besAnchorDate,
+        otherAnchorDate,
         ...windowSavings.map(s => String(s.month).slice(0, 10))
       ])).filter(d => !historicalRates[d])
 
@@ -82,8 +81,8 @@ const Goals = () => {
         setHistoricalRates(prev => ({ ...prev, ...newRates }))
       }
     }
-    loadRates()
-  }, [snapshots, savings])
+    if (assets.length > 0) loadRates()
+  }, [assets, savings])
 
   const fetchData = async () => {
     const { data: ma } = await supabase
@@ -126,83 +125,117 @@ const Goals = () => {
 
   // --- FIRE Projeksiyonu ---
   const fireData = (() => {
-    if (snapshots.length === 0) return null
+    if (assets.length === 0) return null
 
-    const priorSnaps = snapshots.filter(s => s.snapshot_date < GROWTH_WINDOW_START_DATE)
-    const startSnap = priorSnaps.length > 0
-      ? priorSnaps[priorSnaps.length - 1]
-      : snapshots.find(s => s.snapshot_date >= GROWTH_WINDOW_START_DATE)
-    if (!startSnap) return null
+    // Çapalar (Anchor Dates)
+    const besAnchorDate = '2023-09-01'
+    const earliestNonBes = assets.filter(a => a.type !== 'bes').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
+    const otherAnchorDate = earliestNonBes ? earliestNonBes.created_at.split('T')[0] : '2026-04-01'
 
-    const rateV0 = historicalRates[startSnap.snapshot_date]
-    if (!rateV0) return null // geçmiş kur henüz yükleniyor
+    // 1. BES Getirisi (Dolar Bazlı)
+    const besAssets = assets.filter(a => a.type === 'bes')
+    const besValue = besAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
+    const besCost = besAssets.reduce((sum, a) => sum + Number(a.principal || a.avg_cost || 0), 0)
+    
+    let besMonthlyUsdReturn = 0
+    const rateBesAnchor = historicalRates[besAnchorDate]
+    if (besCost > 0 && rateBesAnchor) {
+      const besDays = Math.max(1, (new Date().getTime() - new Date(besAnchorDate).getTime()) / 86400000)
+      const besTlReturn = besValue / besCost
+      const besUsdReturn = besTlReturn / (usdRate / rateBesAnchor)
+      besMonthlyUsdReturn = besUsdReturn > 0 ? Math.pow(besUsdReturn, 30 / besDays) - 1 : 0
+    }
 
-    const V0 = Number(startSnap.total_value)
-    const V1 = portfolioTotal
-    if (!V0 || V0 <= 0) return null
+    // 2. Diğer Varlıkların Getirisi (Dolar Bazlı)
+    const otherAssets = assets.filter(a => a.type !== 'bes')
+    const otherValue = otherAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
+    
+    const getCostValue = (a: any) => {
+      if (a.type === 'nakit') return Number(a.quantity)
+      if (a.type === 'vadeli') return Number(a.principal)
+      const isUSD = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
+      if (isUSD && a.total_try_cost) return Number(a.total_try_cost)
+      const cost = Number(a.avg_cost || 0) * Number(a.quantity || 0)
+      return isUSD ? cost * usdRate : cost
+    }
+    
+    const otherCost = otherAssets.reduce((sum, a) => sum + getCostValue(a), 0)
+    
+    let otherMonthlyUsdReturn = 0
+    const rateOtherAnchor = historicalRates[otherAnchorDate]
+    if (otherCost > 0 && rateOtherAnchor) {
+      const otherDays = Math.max(1, (new Date().getTime() - new Date(otherAnchorDate).getTime()) / 86400000)
+      const otherTlReturn = otherValue / otherCost
+      const otherUsdReturn = otherTlReturn / (usdRate / rateOtherAnchor)
+      otherMonthlyUsdReturn = otherUsdReturn > 0 ? Math.pow(otherUsdReturn, 30 / otherDays) - 1 : 0
+    }
 
-    const V0_usd = V0 / rateV0
-    const V1_usd = V1 / usdRate
+    // 3. Ağırlıklı Ortalama Dinamik Getiri
+    const totalPortfValue = besValue + otherValue
+    if (totalPortfValue === 0) return null
 
+    const besWeight = totalPortfValue > 0 ? besValue / totalPortfValue : 0
+    const otherWeight = totalPortfValue > 0 ? otherValue / totalPortfValue : 0
+    const aylikGetiri = (besWeight * besMonthlyUsdReturn) + (otherWeight * otherMonthlyUsdReturn)
+
+    // Sabit %8 Reel Büyüme (Yıllık %8 -> Aylık bileşik oran)
+    const sabitAylikGetiri = Math.pow(1.08, 1 / 12) - 1
+
+    // 4. Ortalama Aylık Tasarruf
     const startMonth = GROWTH_WINDOW_START_DATE.slice(0, 7)
     const windowSavings = savings.filter(s => String(s.month).slice(0, 7) >= startMonth)
-
     let D_usd = 0
-    let missingRate = false
     windowSavings.forEach(s => {
       const dateKey = String(s.month).slice(0, 10)
       const rate = historicalRates[dateKey]
-      if (!rate) { missingRate = true; return }
-      D_usd += Number(s.amount_try || 0) / rate
+      if (rate) D_usd += Number(s.amount_try || 0) / rate
     })
-    if (missingRate) return null // bazı geçmiş kurlar henüz yükleniyor
-
-    const gunSayisi = Math.max(1, Math.floor((new Date().getTime() - new Date(startSnap.snapshot_date).getTime()) / (1000 * 60 * 60 * 24)))
-    const donemGetirisiPct = (V1_usd - V0_usd - D_usd) / V0_usd
-    const aylikGetiri = Math.pow(1 + donemGetirisiPct, 30 / gunSayisi) - 1
-
     const distinctMonthCount = new Set(windowSavings.map(s => String(s.month).slice(0, 7))).size
     const avgMonthlySaving_usd = distinctMonthCount > 0 ? D_usd / distinctMonthCount : 0
-    const avgMonthlySaving = avgMonthlySaving_usd * usdRate // TRY karşılığı, gösterim için
+    const avgMonthlySaving = avgMonthlySaving_usd * usdRate
 
+    // 5. Projeksiyon Hesaplamaları
     const monthlyExpense = Number(monthlyExpenseUSD) || 0
     const fireTargetUSD = monthlyExpense * 12 / WITHDRAWAL_RATE
+    const currentPortfUSD = totalPortfValue / usdRate
 
-    const simulateMonths = (contributionUsd: number) => {
-      let value = V1_usd
+    const simulateMonths = (contributionUsd: number, rate: number) => {
+      let value = currentPortfUSD
       let months = 0
       const maxMonths = 600
       while (value < fireTargetUSD && months < maxMonths) {
-        value = value * (1 + aylikGetiri) + contributionUsd
+        value = value * (1 + rate) + contributionUsd
         months++
       }
       return months >= maxMonths ? null : months
     }
 
-    const monthsToFire = simulateMonths(avgMonthlySaving_usd)
+    const monthsToFireDinamik = simulateMonths(avgMonthlySaving_usd, aylikGetiri)
+    const monthsToFireSabit = simulateMonths(avgMonthlySaving_usd, sabitAylikGetiri)
 
-    let requiredMonthlySaving: number | null = null
-    const targetYears = Number(targetYearsInput)
-    if (targetYears > 0) {
+    const calculateRequired = (rate: number) => {
+      const targetYears = Number(targetYearsInput)
+      if (targetYears <= 0) return null
       const n = targetYears * 12
-      const r = aylikGetiri
-      const growthFactor = Math.pow(1 + r, n)
+      const growthFactor = Math.pow(1 + rate, n)
       let requiredUsd: number
-      if (r !== 0) {
-        requiredUsd = (fireTargetUSD - V1_usd * growthFactor) / ((growthFactor - 1) / r)
+      if (rate !== 0) {
+        requiredUsd = (fireTargetUSD - currentPortfUSD * growthFactor) / ((growthFactor - 1) / rate)
       } else {
-        requiredUsd = (fireTargetUSD - V1_usd) / n
+        requiredUsd = (fireTargetUSD - currentPortfUSD) / n
       }
-      requiredMonthlySaving = requiredUsd * usdRate
+      return requiredUsd * usdRate
     }
 
     return {
-      V0, V1, D: D_usd * usdRate, donemGetirisiPct, aylikGetiri, avgMonthlySaving,
-      fireTargetUSD, fireTargetTRY: fireTargetUSD * usdRate, monthsToFire, requiredMonthlySaving,
-      startDate: startSnap.snapshot_date
+      aylikGetiri, sabitAylikGetiri, avgMonthlySaving,
+      fireTargetUSD, fireTargetTRY: fireTargetUSD * usdRate, 
+      monthsToFireDinamik, monthsToFireSabit, 
+      requiredMonthlySavingDinamik: calculateRequired(aylikGetiri),
+      requiredMonthlySavingSabit: calculateRequired(sabitAylikGetiri),
+      besWeight, otherWeight
     }
   })()
-
   const handleAddManualAsset = async () => {
     if (!assetForm.name || !assetForm.value_try) return
     await supabase.from('manual_assets').insert({
@@ -360,7 +393,13 @@ const Goals = () => {
 
       {/* FIRE Projeksiyonu Kartı */}
       <div style={{ ...card, marginBottom: '16px' }}>
-        <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '14px', color: 'var(--text-primary)' }}>🔥 FIRE Projeksiyonu</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🔥 FIRE Projeksiyonu</p>
+          <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '8px', padding: '2px', border: '1px solid var(--border)' }}>
+            <button onClick={() => setFireMode('dinamik')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'dinamik' ? 'var(--accent)' : 'none', color: fireMode === 'dinamik' ? 'white' : 'var(--text-secondary)' }}>Dinamik</button>
+            <button onClick={() => setFireMode('sabit')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'sabit' ? 'var(--accent)' : 'none', color: fireMode === 'sabit' ? 'white' : 'var(--text-secondary)' }}>Sabit %8</button>
+          </div>
+        </div>
 
         <div style={{ marginBottom: '14px' }}>
           <label style={labelStyle}>Aylık Hedef Gider ($)</label>
@@ -369,63 +408,76 @@ const Goals = () => {
 
         {!fireData ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-            Projeksiyon için yeterli snapshot verisi yok.
+            Projeksiyon için hesaplamalar yapılıyor...
           </p>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-              <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>FIRE Hedefi</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(fireData.fireTargetTRY)}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${fireData.fireTargetUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-              </div>
-              <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Yıllıklandırılmış Getiri</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: fireData.aylikGetiri >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                  %{isHidden ? '••' : ((Math.pow(1 + fireData.aylikGetiri, 12) - 1) * 100).toFixed(1)}
-                </p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fireData.startDate} itibarıyla</p>
-              </div>
-            </div>
+            {(() => {
+              const currentAylikGetiri = fireMode === 'dinamik' ? fireData.aylikGetiri : fireData.sabitAylikGetiri;
+              const currentMonthsToFire = fireMode === 'dinamik' ? fireData.monthsToFireDinamik : fireData.monthsToFireSabit;
+              const currentRequiredSaving = fireMode === 'dinamik' ? fireData.requiredMonthlySavingDinamik : fireData.requiredMonthlySavingSabit;
 
-            <div style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', borderRadius: '14px', padding: '18px', marginBottom: '14px', textAlign: 'center' }}>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginBottom: '6px', fontWeight: '600' }}>Mevcut tempoyla FIRE'a kalan süre</p>
-              {fireData.monthsToFire === null ? (
-                <p style={{ color: 'white', fontSize: '18px', fontWeight: '800' }}>50+ yıl (tempo yetersiz)</p>
-              ) : (
+              return (
                 <>
-                  <p style={{ color: 'white', fontSize: '28px', fontWeight: '800' }}>
-                    {(fireData.monthsToFire / 12).toFixed(1)} yıl
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                    <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
+                      <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>FIRE Hedefi</p>
+                      <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(fireData.fireTargetTRY)}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${fireData.fireTargetUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
+                      <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Yıllıklandırılmış Getiri</p>
+                      <p style={{ fontSize: '15px', fontWeight: '800', color: currentAylikGetiri >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                        %{isHidden ? '••' : ((Math.pow(1 + currentAylikGetiri, 12) - 1) * 100).toFixed(1)}
+                      </p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dolar (USD) Bazlı</p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', borderRadius: '14px', padding: '18px', marginBottom: '14px', textAlign: 'center' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginBottom: '6px', fontWeight: '600' }}>Mevcut tempoyla FIRE'a kalan süre</p>
+                    {currentMonthsToFire === null ? (
+                      <p style={{ color: 'white', fontSize: '18px', fontWeight: '800' }}>50+ yıl (tempo yetersiz)</p>
+                    ) : (
+                      <>
+                        <p style={{ color: 'white', fontSize: '28px', fontWeight: '800' }}>
+                          {(currentMonthsToFire / 12).toFixed(1)} yıl
+                        </p>
+                        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '4px' }}>
+                          ~{new Date(Date.now() + currentMonthsToFire * 30 * 24 * 60 * 60 * 1000).getFullYear()} yılında
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
+                    Aylık tasarrufunuz ortalama <strong>{fc(fireData.avgMonthlySaving)}</strong> baz alındı. 
+                    {fireMode === 'dinamik' 
+                      ? ` Ağırlıklı büyüme hızı (%${(fireData.besWeight * 100).toFixed(0)} BES, %${(fireData.otherWeight * 100).toFixed(0)} Diğer) üzerinden hesaplandı.` 
+                      : ' Portföy için yıllık reel %8 büyüme varsayıldı.'}
                   </p>
-                  <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '4px' }}>
-                    ~{new Date(Date.now() + fireData.monthsToFire * 30 * 24 * 60 * 60 * 1000).getFullYear()} yılında
-                  </p>
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
+                    <label style={labelStyle}>Şu kadar yılda ulaşmak istersem, aylık ne kadar tasarruf gerekir?</label>
+                    <input type="number" value={targetYearsInput} onChange={e => setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
+
+                    {currentRequiredSaving !== null && (
+                      <div style={{ marginTop: '10px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '10px', padding: '12px' }}>
+                        {currentRequiredSaving > 0 ? (
+                          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent)' }}>
+                            Gereken aylık tasarruf: {fc(currentRequiredSaving)}
+                          </p>
+                        ) : (
+                          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--green)' }}>
+                            Bu hedefe mevcut portföyünle bile tasarruf yapmadan ulaşabilirsin! 🎉
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
-              )}
-            </div>
-
-            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
-              Ortalama aylık tasarrufun {fc(fireData.avgMonthlySaving)} baz alınarak hesaplandı ({fireData.startDate}'ten bugüne piyasa getirisi ayrıştırılarak).
-            </p>
-
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-              <label style={labelStyle}>Şu kadar yılda ulaşmak istersem, aylık ne kadar tasarruf gerekir?</label>
-              <input type="number" value={targetYearsInput} onChange={e => setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
-
-              {fireData.requiredMonthlySaving !== null && (
-                <div style={{ marginTop: '10px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '10px', padding: '12px' }}>
-                  {fireData.requiredMonthlySaving > 0 ? (
-                    <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent)' }}>
-                      Gereken aylık tasarruf: {fc(fireData.requiredMonthlySaving)}
-                    </p>
-                  ) : (
-                    <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--green)' }}>
-                      Bu hedefe mevcut portföyünle bile tasarruf yapmadan ulaşabilirsin! 🎉
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+              );
+            })()}
           </>
         )}
       </div>
