@@ -22,6 +22,7 @@ const Dashboard = () => {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [dailyChange, setDailyChange] = useState<number | null>(null)
   const [dailyChangePct, setDailyChangePct] = useState(0)
@@ -358,25 +359,99 @@ const Dashboard = () => {
           {selectedGroup && (() => {
             const group = pieData.find((g: any) => g.type === selectedGroup)
             if (!group) return null
+
+            if (group.type === 'usd_hisse') {
+              const strategies: Record<string, { value: number, items: any[] }> = {}
+              group.items.forEach((a: any) => {
+                const st = a.strategy || 'Belirtilmemiş'
+                if (!strategies[st]) strategies[st] = { value: 0, items: [] }
+                strategies[st].value += getAssetValue(a)
+                strategies[st].items.push(a)
+              })
+              
+              const strategyData = Object.entries(strategies).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.value - a.value)
+              
+              return (
+                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    {selectedStrategy && (
+                      <button onClick={() => setSelectedStrategy(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', fontWeight: '700', padding: '4px 8px', color: 'var(--text-secondary)' }}>← Geri</button>
+                    )}
+                    <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
+                      {selectedStrategy ? `${selectedStrategy} Stratejisi Detayı` : `${group.label} — Strateji Dağılımı`}
+                    </p>
+                  </div>
+
+                  {!selectedStrategy ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <ResponsiveContainer width={100} height={100}>
+                        <PieChart>
+                          <Pie data={strategyData} cx="50%" cy="50%" innerRadius={25} outerRadius={45} dataKey="value" nameKey="name" paddingAngle={2}
+                            onClick={(data: any) => setSelectedStrategy(data.name)} style={{ cursor: 'pointer', outline: 'none' }} isAnimationActive={false}>
+                            {strategyData.map((_: any, i: number) => <Cell key={i} fill={['#f59e0b', '#10b981', '#6366f1', '#8b5cf6'][i % 4]} />)}
+                          </Pie>
+                          <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ flex: 1 }}>
+                        {strategyData.map((item: any, i: number) => {
+                          const weight = group.value > 0 ? ((item.value / group.value) * 100).toFixed(1) : 0
+                          return (
+                            <div key={i} onClick={() => setSelectedStrategy(item.name)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: ['#f59e0b', '#10b981', '#6366f1', '#8b5cf6'][i % 4] }} />
+                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.name}</span>
+                              </div>
+                              <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>%{weight}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {strategies[selectedStrategy]?.items
+                        .map((asset: any) => ({ asset, value: getAssetValue(asset) }))
+                        .sort((a: any, b: any) => b.value - a.value)
+                        .map(({ asset, value }) => {
+                          const weight = strategies[selectedStrategy].value > 0 ? ((value / strategies[selectedStrategy].value) * 100).toFixed(1) : 0;
+                          return (
+                            <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)', borderRadius: '6px' }}>
+                              <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{asset.name}</span>
+                              <div style={{ textAlign: 'right' }}>
+                                <p style={{ fontSize: '13px', fontWeight: '700' }}>{fc(value)}</p>
+                                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>%{weight}</p>
+                              </div>
+                            </div>
+                          )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
             return (
               <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                 <p style={{ fontWeight: '700', fontSize: '13px', marginBottom: '10px', color: 'var(--text-primary)' }}>{group.label} — Dağılım</p>
-                {group.items.map((asset: any) => {
-                  const value = getAssetValue(asset)
-                  const weight = group.value > 0 ? ((value / group.value) * 100).toFixed(1) : 0
-                  return (
-                    <div key={asset.id}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)', borderRadius: '6px', transition: 'background 0.15s ease' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{asset.name}</span>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '13px', fontWeight: '700' }}>{fc(value)}</p>
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>%{weight}</p>
+                {group.items
+                  .map((asset: any) => ({ asset, value: getAssetValue(asset) }))
+                  .sort((a: any, b: any) => b.value - a.value)
+                  .map(({ asset, value }) => {
+                    const weight = group.value > 0 ? ((value / group.value) * 100).toFixed(1) : 0;
+                    return (
+                      <div key={asset.id}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)', borderRadius: '6px', transition: 'background 0.15s ease' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{asset.name}</span>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: '13px', fontWeight: '700' }}>{fc(value)}</p>
+                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>%{weight}</p>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
               </div>
             )
           })()}

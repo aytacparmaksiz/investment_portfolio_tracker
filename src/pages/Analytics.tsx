@@ -23,6 +23,7 @@ const Analytics = () => {
   const [totalCost, setTotalCost] = useState<number>(0)
   const [firstTxDate, setFirstTxDate] = useState<string>('')
   const [expandedAssetGroups, setExpandedAssetGroups] = useState<Set<string>>(new Set())
+  const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set())
 
   useEffect(() => { 
     refresh()
@@ -194,7 +195,101 @@ const Analytics = () => {
                     <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
                   </div>
 
-                  {isExpanded && items.map((asset: any, index: number) => {
+                  {isExpanded && type === 'usd_hisse' ? (() => {
+                    const sectors: Record<string, any[]> = {}
+                    items.forEach((a: any) => {
+                      const sec = a.sector || 'Diğer'
+                      if (!sectors[sec]) sectors[sec] = []
+                      sectors[sec].push(a)
+                    })
+                    return Object.entries(sectors).map(([sectorName, secItems]) => {
+                      const isSecExpanded = expandedSectors.has(sectorName)
+                      
+                      let sectorCost = 0;
+                      let sectorValue = 0;
+                      secItems.forEach((asset: any) => {
+                        const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * usdRate : 0);
+                        sectorValue += livePrice * Number(asset.quantity);
+                        sectorCost += asset.total_try_cost ? Number(asset.total_try_cost) : ((asset.avg_cost || 0) * usdRate * Number(asset.quantity));
+                      });
+                      const sectorGain = sectorValue - sectorCost;
+                      const sectorGainPct = sectorCost > 0 ? (sectorGain / sectorCost) * 100 : 0;
+  
+                      return (
+                        <div key={sectorName} style={{ paddingLeft: '8px', marginTop: '8px', marginBottom: '8px' }}>
+                          <div onClick={() => {
+                            const next = new Set(expandedSectors)
+                            if (next.has(sectorName)) next.delete(sectorName)
+                            else next.add(sectorName)
+                            setExpandedSectors(next)
+                          }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '6px 0', borderBottom: isSecExpanded ? 'none' : '1px solid var(--border-light)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{isSecExpanded ? '▼' : '▶'}</span>
+                              <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)' }}>{sectorName} ({secItems.length})</span>
+                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: '700', color: sectorGain >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                              {isHidden ? '••••••' : `${sectorGain >= 0 ? '+' : ''}%${Math.abs(sectorGainPct).toFixed(1)}`}
+                            </span>
+                          </div>
+                          
+                          {isSecExpanded && secItems.map((asset: any, index: number) => {
+                            const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * usdRate : 0)
+                            const currentValue = livePrice * Number(asset.quantity)
+                            const costValueTRY = asset.total_try_cost ? Number(asset.total_try_cost) : ((asset.avg_cost || 0) * usdRate * Number(asset.quantity))
+                            const gain = currentValue - costValueTRY
+                            const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
+                            const dailyPct = prices[asset.symbol + '_dailypct']
+                            
+                            const unitCostDisplay = isHidden ? '••••••' : `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                            const unitPriceDisplay = isHidden ? '••••••' : `$${(prices[asset.symbol + '_usd'] ?? (livePrice / usdRate)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+
+                            return (
+                              <div key={asset.id} style={{ marginBottom: index < secItems.length - 1 ? '16px' : 0, paddingBottom: index < secItems.length - 1 ? '16px' : 0, borderBottom: index < secItems.length - 1 ? '1px solid var(--border)' : 'none', paddingLeft: '14px', paddingTop: '10px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+                                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                    <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
+                                    <div>
+                                      <p style={{ fontWeight: '700', fontSize: '14px', color: '#1e1b4b' }}>{asset.name}</p>
+                                      <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>{asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet · <span style={{ color: 'var(--accent)' }}>{asset.strategy || 'Core'}</span></p>
+                                    </div>
+                                  </div>
+                                  <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                    <p style={{ fontSize: '15px', fontWeight: '800', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                      {isHidden ? '••••••' : (gain >= 0 ? `+₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : `-₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`)}
+                                    </p>
+                                    <p style={{ fontSize: '11px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                      {isHidden ? '••••••' : `${gain >= 0 ? '▲' : '▼'} ${Math.abs(gainPct).toFixed(2)}%`}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0', borderTop: '1px solid var(--border-light)', paddingTop: '10px' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>MALİYET</p>
+                                    <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(costValueTRY)}</p>
+                                    <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{unitCostDisplay}</p>
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>GÜNCEL</p>
+                                    <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(currentValue)}</p>
+                                    <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{unitPriceDisplay}</p>
+                                  </div>
+                                  <div style={{ flex: 1, textAlign: 'right' }}>
+                                    <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '3px' }}>GÜNLÜK</p>
+                                    {dailyPct !== undefined ? (
+                                      <p style={{ fontSize: '12px', fontWeight: '700', color: dailyPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                        {isHidden ? '••••••' : `${dailyPct >= 0 ? '▲' : '▼'} ${Math.abs(dailyPct).toFixed(2)}%`}
+                                      </p>
+                                    ) : <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>—</p>}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })
+                  })() : isExpanded && items.map((asset: any, index: number) => {
                     const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isUSD ? usdRate : 1) : 0)
                     const currentValue = livePrice * Number(asset.quantity)
                     const costValueTRY = isUSD && asset.total_try_cost ? Number(asset.total_try_cost) : (isUSD ? (asset.avg_cost || 0) * usdRate * Number(asset.quantity) : (asset.avg_cost || 0) * Number(asset.quantity))
@@ -202,7 +297,6 @@ const Analytics = () => {
                     const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                     const dailyPct = prices[asset.symbol + '_dailypct']
                     
-                    // Ham birim verilerini gizlilik durumuna göre şartlandırdık
                     const unitCostDisplay = isHidden ? '••••••' : (isUSD
                       ? `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                       : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
