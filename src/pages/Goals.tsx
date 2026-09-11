@@ -395,54 +395,11 @@ const Goals = () => {
         </button>
       </div>
 
-      {/* =========================================
+{/* =========================================
           SEKME 1: HEDEFLER VE BARAJLAR
       ========================================= */}
       {activeTab === 'hedefler' && (
         <>
-          {/* Ara Hedef (Milestone) Kartı - Tüm Varlıklar Bazlı */}
-          <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
-              <div>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Hedef</p>
-                <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>${nextMilestoneUSD.toLocaleString('en-US')}</p>
-              </div>
-              <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{milestoneProgressPct.toFixed(1)}</p>
-            </div>
-
-            <div style={{ position: 'relative', height: '16px', background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <div style={{
-                position: 'absolute', left: 0, top: 0, height: '100%',
-                width: `${milestoneProgressPct}%`,
-                background: 'linear-gradient(90deg, #818cf8, #6366f1)',
-                borderRadius: '8px',
-                transition: 'width 0.6s ease'
-              }} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>${Math.floor(currentNW_USD).toLocaleString('en-US')}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>Hedefe Kalan: ${(nextMilestoneUSD - currentNW_USD).toLocaleString('en-US', {maximumFractionDigits:0})}</span>
-            </div>
-
-            {fireData && (
-              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px', marginTop: '16px', textAlign: 'center' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>Sonraki Hedefe Kalan Süre</p>
-                <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-                   <div>
-                      <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneDinamik !== null ? `${fireData.monthsToMilestoneDinamik} ay` : '---'}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dinamik Getiri</p>
-                   </div>
-                   <div style={{ width: '1px', height: '30px', background: 'var(--border)' }} />
-                   <div>
-                      <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneSabit !== null ? `${fireData.monthsToMilestoneSabit} ay` : '---'}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Sabit Getiri</p>
-                   </div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Ana Hedef Tüpü */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
@@ -477,6 +434,49 @@ const Goals = () => {
                 <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${Math.max((goalTRY - grandTotal) / usdRate, 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               </div>
               </div>
+          </div>
+
+          {/* Ara Hedef (Milestone) Kartı - Tüm Varlıklar Bazlı */}
+          <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
+              <div>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Hedef</p>
+                <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>${nextMilestoneUSD.toLocaleString('en-US')}</p>
+              </div>
+              <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{milestoneProgressPct.toFixed(1)}</p>
+            </div>
+
+            <div style={{ position: 'relative', height: '16px', background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <div style={{
+                position: 'absolute', left: 0, top: 0, height: '100%',
+                width: `${milestoneProgressPct}%`,
+                background: 'linear-gradient(90deg, #818cf8, #6366f1)',
+                borderRadius: '8px',
+                transition: 'width 0.6s ease'
+              }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>${Math.floor(currentNW_USD).toLocaleString('en-US')}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>Hedefe Kalan: ${(nextMilestoneUSD - currentNW_USD).toLocaleString('en-US', {maximumFractionDigits:0})}</span>
+            </div>
+
+            {fireData && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px', marginTop: '16px', textAlign: 'center' }}>
+                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>Bu Baraja Tahmini Kalan Süre</p>
+                <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+                   <div>
+                      <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneDinamik !== null ? `${fireData.monthsToMilestoneDinamik} ay` : '---'}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dinamik Getiri</p>
+                   </div>
+                   <div style={{ width: '1px', height: '30px', background: 'var(--border)' }} />
+                   <div>
+                      <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneSabit !== null ? `${fireData.monthsToMilestoneSabit} ay` : '---'}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Sabit Getiri</p>
+                   </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Dağılım Kartı */}
