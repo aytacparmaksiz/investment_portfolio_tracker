@@ -463,7 +463,7 @@ const Goals = () => {
           {/* Ana Hedef Tüpü */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
-              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Nihai Hedef (1 Milyon $)</p>
+              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Toplam Varlık</p>
               <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{progressPct.toFixed(1)}</p>
             </div>
 
@@ -500,7 +500,7 @@ const Goals = () => {
           <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <div>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Baraj</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Milestone</p>
                 <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>${nextMilestoneUSD.toLocaleString('en-US')}</p>
               </div>
               <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{milestoneProgressPct.toFixed(1)}</p>
@@ -523,7 +523,7 @@ const Goals = () => {
 
             {fireData && (
               <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px', marginTop: '16px', textAlign: 'center' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>Bu Baraja Tahmini Kalan Süre</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>Tahmini Kalan Süre</p>
                 <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
                    <div>
                       <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneDinamik !== null ? `${fireData.monthsToMilestoneDinamik} ay` : '---'}</p>
@@ -866,9 +866,6 @@ const Goals = () => {
 
                       <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
                         Aylık tasarrufunuz ortalama <strong>{fc(fireData.avgMonthlySaving)}</strong> baz alındı. 
-                        {fireMode === 'dinamik' 
-                          ? ` Büyüme hızı aktif yatırımlarınız (%${(fireData.besW * 100).toFixed(0)} BES, %${(fireData.usdW * 100).toFixed(0)} Döviz, %${(fireData.tryW * 100).toFixed(0)} TL) üzerinden hesaplanıp toplam sermayeye uygulandı.` 
-                          : ' Portföy için yıllık reel %8 büyüme varsayıldı.'}
                       </p>
 
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
@@ -937,7 +934,7 @@ const Goals = () => {
                           {m.reached ? (
                             <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', background: 'var(--green-dim)', padding: '2px 8px', borderRadius: '10px' }}>Ulaşıldı ✓</span>
                           ) : isNext ? (
-                            <span style={{ fontSize: '11px', fontWeight: '700', color: 'white', background: 'var(--accent)', padding: '2px 8px', borderRadius: '10px' }}>Sıradaki Baraj</span>
+                            <span style={{ fontSize: '11px', fontWeight: '700', color: 'white', background: 'var(--accent)', padding: '2px 8px', borderRadius: '10px' }}>Milestone</span>
                           ) : null}
                         </div>
 
