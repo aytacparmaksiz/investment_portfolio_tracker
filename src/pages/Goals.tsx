@@ -43,6 +43,7 @@ const Goals = () => {
   })
   
   const [fireMode, setFireMode] = useState<'dinamik' | 'sabit'>('dinamik')
+  const [showReturnDetails, setShowReturnDetails] = useState(false)
 
   const CustomizedLineLabel = (props: any) => {
     const { x, y, value } = props
@@ -61,25 +62,22 @@ const Goals = () => {
 
   useEffect(() => {
     const loadRates = async () => {
-      const besAnchorDate = '2023-09-01'
-      const earliestNonBes = assets.filter(a => a.type !== 'bes').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
-      const otherAnchorDate = earliestNonBes ? earliestNonBes.created_at.split('T')[0] : '2026-04-01'
-
       const startMonth = GROWTH_WINDOW_START_DATE.slice(0, 7)
       const windowSavings = savings.filter(s => String(s.month).slice(0, 7) >= startMonth)
 
+      // Sistemdeki HER varlığın alındığı günün dolar kurunu çekiyoruz
       const datesToFetch = Array.from(new Set([
-        besAnchorDate,
-        otherAnchorDate,
+        '2023-09-01', // BES Anchor
+        ...assets.map(a => a.created_at.split('T')[0]),
         ...windowSavings.map(s => String(s.month).slice(0, 10))
-      ])).filter(d => !historicalRates[d])
+      ])).filter(d => !historicalRates[d as string])
 
       if (datesToFetch.length === 0) return
 
       const newRates: Record<string, number> = {}
       for (const date of datesToFetch) {
-        const rate = await fetchHistoricalRate(date)
-        if (rate) newRates[date] = rate
+        const rate = await fetchHistoricalRate(date as string)
+        if (rate) newRates[date as string] = rate
       }
       if (Object.keys(newRates).length > 0) {
         setHistoricalRates(prev => ({ ...prev, ...newRates }))
@@ -107,6 +105,9 @@ const Goals = () => {
   const usdRate = prices['USDTRY=X'] || 46.4
   const goalTRY = GOAL_USD * usdRate
 
+  const isUSD = (type: string) => ['usd_hisse', 'kripto', 'etf', 'doviz'].includes(type)
+  const isCash = (type: string) => ['nakit', 'vadeli', 'doviz'].includes(type)
+
   const getAssetValue = (asset: any) => {
     if (asset.type === 'vadeli' && asset.principal && asset.interest_rate) {
       const start = new Date(asset.start_date || asset.created_at)
@@ -118,7 +119,11 @@ const Goals = () => {
       const vals = asset.manual_values || []
       return Number(vals[vals.length - 1]?.value || 0)
     }
-    const price = prices[asset.symbol] ?? asset.avg_cost ?? 0
+    
+    const isUsdAsset = isUSD(asset.type);
+    const fallbackPrice = isUsdAsset ? (Number(asset.avg_cost || 0) * usdRate) : Number(asset.avg_cost || 0);
+    const price = prices[asset.symbol] ?? fallbackPrice ?? 0;
+    
     return price * Number(asset.quantity)
   }
 
@@ -139,52 +144,102 @@ const Goals = () => {
   const fireData = (() => {
     if (assets.length === 0) return null
 
-    const besAnchorDate = '2023-09-01'
-    const earliestNonBes = assets.filter(a => a.type !== 'bes').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
-    const otherAnchorDate = earliestNonBes ? earliestNonBes.created_at.split('T')[0] : '2026-04-01'
+    // GERÇEK GÜN HESAPLAYICI (Suni 180 gün kuralı kaldırıldı)
+    const getHoldingDays = (dateStr?: string) => {
+      if (!dateStr) return 30;
+      const days = (new Date().getTime() - new Date(dateStr).getTime()) / 86400000;
+      // Sadece 1-2 günlük alımların matematiksel olarak yıllık %5000 gibi patlamalar yaratmasını 
+      // engellemek için minimum 30 gün tabanı uygulanır. Sonrasında tamamen gerçek gün çalışır.
+      return Math.max(30, days); 
+    }
 
     const besAssets = assets.filter(a => a.type === 'bes')
+    const usdGrowthAssets = assets.filter(a => isUSD(a.type) && !isCash(a.type))
+    const tryGrowthAssets = assets.filter(a => !isUSD(a.type) && !isCash(a.type) && a.type !== 'bes')
+    const cashAssets = assets.filter(a => isCash(a.type))
+
+    // 1. BES Getirisi (Deflasyonlu)
     const besValue = besAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
     const besCost = besAssets.reduce((sum, a) => sum + Number(a.principal || a.avg_cost || 0), 0)
-    
     let besMonthlyUsdReturn = 0
-    const rateBesAnchor = historicalRates[besAnchorDate]
-    if (besCost > 0 && rateBesAnchor) {
-      const besDays = Math.max(1, (new Date().getTime() - new Date(besAnchorDate).getTime()) / 86400000)
-      const besTlReturn = besValue / besCost
-      const besUsdReturn = besTlReturn / (usdRate / rateBesAnchor)
-      besMonthlyUsdReturn = besUsdReturn > 0 ? Math.pow(besUsdReturn, 30 / besDays) - 1 : 0
+    const rateBesAnchor = historicalRates['2023-09-01'] || usdRate
+    if (besCost > 0) {
+      const usdReturn = (besValue / besCost) / (usdRate / rateBesAnchor)
+      besMonthlyUsdReturn = usdReturn > 0 ? Math.pow(usdReturn, 30 / getHoldingDays('2023-09-01')) - 1 : 0
     }
 
-    const otherAssets = assets.filter(a => a.type !== 'bes')
-    const otherValue = otherAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
-    
-    const getCostValue = (a: any) => {
-      if (a.type === 'nakit') return Number(a.quantity)
-      if (a.type === 'vadeli') return Number(a.principal)
-      const isUSD = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
-      if (isUSD && a.total_try_cost) return Number(a.total_try_cost)
-      const cost = Number(a.avg_cost || 0) * Number(a.quantity || 0)
-      return isUSD ? cost * usdRate : cost
-    }
-    
-    const otherCost = otherAssets.reduce((sum, a) => sum + getCostValue(a), 0)
-    
-    let otherMonthlyUsdReturn = 0
-    const rateOtherAnchor = historicalRates[otherAnchorDate]
-    if (otherCost > 0 && rateOtherAnchor) {
-      const otherDays = Math.max(1, (new Date().getTime() - new Date(otherAnchorDate).getTime()) / 86400000)
-      const otherTlReturn = otherValue / otherCost
-      const otherUsdReturn = otherTlReturn / (usdRate / rateOtherAnchor)
-      otherMonthlyUsdReturn = otherUsdReturn > 0 ? Math.pow(otherUsdReturn, 30 / otherDays) - 1 : 0
+    // 2. USD Büyüme (Saf Dolar Getirisi - Her varlık kendi süresiyle ağırlıklandırılır)
+    let usdValueInUsd = 0;
+    let usdCostInUsd = 0;
+    let usdWeightedDays = 0;
+
+    usdGrowthAssets.forEach(a => {
+      const assetUsdValue = getAssetValue(a) / usdRate;
+      usdValueInUsd += assetUsdValue;
+      
+      const assetUsdCost = Number(a.avg_cost || 0) * Number(a.quantity || 0);
+      usdCostInUsd += assetUsdCost;
+      
+      // Süre (gün) yatırım yapılan paranın büyüklüğüyle ağırlıklandırılır
+      usdWeightedDays += assetUsdCost * getHoldingDays(a.created_at);
+    });
+
+    let usdMonthlyReturn = 0;
+    if (usdCostInUsd > 0) {
+      const usdTotalReturn = usdValueInUsd / usdCostInUsd;
+      const avgDays = usdWeightedDays / usdCostInUsd;
+      usdMonthlyReturn = usdTotalReturn > 0 ? Math.pow(usdTotalReturn, 30 / avgDays) - 1 : 0;
     }
 
-    const totalPortfValue = besValue + otherValue
-    if (totalPortfValue === 0) return null
+    // 3. TRY Büyüme (Deflasyonlu BIST/Altın - Her varlık KENDİ KURUYLA ve süresiyle hesaplanır)
+    let tryValue = 0;
+    let tryValueInUsd = 0;
+    let tryCostInUsd = 0;
+    let tryWeightedDays = 0;
 
-    const besWeight = totalPortfValue > 0 ? besValue / totalPortfValue : 0
-    const otherWeight = totalPortfValue > 0 ? otherValue / totalPortfValue : 0
-    const aylikGetiri = (besWeight * besMonthlyUsdReturn) + (otherWeight * otherMonthlyUsdReturn)
+    tryGrowthAssets.forEach(a => {
+      const assetTryValue = getAssetValue(a);
+      tryValue += assetTryValue;
+      tryValueInUsd += assetTryValue / usdRate; // Güncel kurla dolar değeri
+      
+      const assetTryCost = a.type === 'vadeli' ? Number(a.principal || 0) : (Number(a.avg_cost || 0) * Number(a.quantity || 0));
+      const creationDate = a.created_at.split('T')[0];
+      const assetUsdRateAtBuy = historicalRates[creationDate] || usdRate;
+      
+      const costUsd = assetTryCost / assetUsdRateAtBuy; // Alındığı günkü kur üzerinden Dolar maliyeti
+      tryCostInUsd += costUsd;
+      
+      tryWeightedDays += costUsd * getHoldingDays(creationDate);
+    });
+
+    let tryMonthlyUsdReturn = 0;
+    if (tryCostInUsd > 0) {
+      const tryTotalReturn = tryValueInUsd / tryCostInUsd;
+      const avgDays = tryWeightedDays / tryCostInUsd;
+      tryMonthlyUsdReturn = tryTotalReturn > 0 ? Math.pow(tryTotalReturn, 30 / avgDays) - 1 : 0;
+    }
+
+    // 4. Nakit Varlıklar
+
+    // 4. Nakit Varlıklar
+    const cashValue = cashAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
+
+    // TOPLAM LİKİT PORTFÖY (Nakit dahil, projeksiyon ana sermayesi için gerekli değişken)
+    const totalInvestedValue = besValue + (usdValueInUsd * usdRate) + tryValue + cashValue
+
+    // DİNAMİK GETİRİ HESABI (Nakit HARİÇ - Sadece aktif yatırımların performansı ölçülür)
+    const activeInvestmentsValue = besValue + (usdValueInUsd * usdRate) + tryValue
+    let aylikGetiri = 0
+    let besW = 0, usdW = 0, tryW = 0
+
+    if (activeInvestmentsValue > 0) {
+      besW = besValue / activeInvestmentsValue
+      usdW = (usdValueInUsd * usdRate) / activeInvestmentsValue
+      tryW = tryValue / activeInvestmentsValue
+      
+      // Getiri oranı SADECE yatırımdaki varlıkların ağırlığına göre bulunur
+      aylikGetiri = (besW * besMonthlyUsdReturn) + (usdW * usdMonthlyReturn) + (tryW * tryMonthlyUsdReturn)
+    }
 
     const sabitAylikGetiri = Math.pow(1.08, 1 / 12) - 1
 
@@ -193,8 +248,8 @@ const Goals = () => {
     let D_usd = 0
     windowSavings.forEach(s => {
       const dateKey = String(s.month).slice(0, 10)
-      const rate = historicalRates[dateKey]
-      if (rate) D_usd += Number(s.amount_try || 0) / rate
+      const rate = historicalRates[dateKey] || usdRate
+      D_usd += Number(s.amount_try || 0) / rate
     })
     const distinctMonthCount = new Set(windowSavings.map(s => String(s.month).slice(0, 7))).size
     const avgMonthlySaving_usd = distinctMonthCount > 0 ? D_usd / distinctMonthCount : 0
@@ -202,9 +257,11 @@ const Goals = () => {
 
     const monthlyExpense = Number(monthlyExpenseUSD) || 0
     const fireTargetUSD = monthlyExpense * 12 / WITHDRAWAL_RATE
-    const currentPortfUSD = totalPortfValue / usdRate
+    
+    // Projeksiyona Tüm Likit Portföy (Nakit Dahil) Sermaye Olarak Eklenir
+    const currentPortfUSD = totalInvestedValue / usdRate
 
-    // 1. Standart Hedef Simülasyonu (Sadece Likit Portföy, FIRE hedefleri ve Liquid Milestonelar için)
+    // 1. Standart Hedef Simülasyonu
     const simulateMonthsToTarget = (targetUSD: number, contributionUsd: number, rate: number, startUSD: number) => {
       let value = startUSD
       let months = 0
@@ -219,7 +276,7 @@ const Goals = () => {
     const monthsToFireDinamik = simulateMonthsToTarget(fireTargetUSD, avgMonthlySaving_usd, aylikGetiri, currentPortfUSD)
     const monthsToFireSabit = simulateMonthsToTarget(fireTargetUSD, avgMonthlySaving_usd, sabitAylikGetiri, currentPortfUSD)
 
-    // 2. Özel Milestone Simülasyonu (Manuel varlıklar + Likit portföy birlikte baz alınır - Hedefler sekmesi için)
+    // 2. Özel Milestone Simülasyonu (Manuel varlıklar dahil - Hedefler sekmesi)
     const simulateMonthsToMilestone = (targetUSD: number, contributionUsd: number, rate: number) => {
       let liquid = currentPortfUSD
       let manual = manualTotal / usdRate
@@ -235,7 +292,7 @@ const Goals = () => {
     const monthsToMilestoneDinamik = simulateMonthsToMilestone(nextMilestoneUSD, avgMonthlySaving_usd, aylikGetiri)
     const monthsToMilestoneSabit = simulateMonthsToMilestone(nextMilestoneUSD, avgMonthlySaving_usd, sabitAylikGetiri)
 
-    // YENİ: Sadece Yatırım Portföyü Bazlı Tüm Milestonelar (FIRE sekmesi için yol haritası)
+    // 3. Yatırım Portföyü Bazlı Tüm Milestonelar (FIRE sekmesi yol haritası)
     const liquidMilestoneEtas = MILESTONES.map(m => {
       const isReached = currentPortfUSD >= m;
       return {
@@ -268,7 +325,10 @@ const Goals = () => {
       liquidMilestoneEtas,
       requiredMonthlySavingDinamik: calculateRequired(aylikGetiri),
       requiredMonthlySavingSabit: calculateRequired(sabitAylikGetiri),
-      besWeight, otherWeight
+      besW, usdW, tryW,
+      besAnnPct: (Math.pow(1 + besMonthlyUsdReturn, 12) - 1) * 100,
+      usdAnnPct: (Math.pow(1 + usdMonthlyReturn, 12) - 1) * 100,
+      tryAnnPct: (Math.pow(1 + tryMonthlyUsdReturn, 12) - 1) * 100
     }
   })()
 
@@ -395,7 +455,7 @@ const Goals = () => {
         </button>
       </div>
 
-{/* =========================================
+      {/* =========================================
           SEKME 1: HEDEFLER VE BARAJLAR
       ========================================= */}
       {activeTab === 'hedefler' && (
@@ -403,7 +463,7 @@ const Goals = () => {
           {/* Ana Hedef Tüpü */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
-              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Toplam Varlık</p>
+              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Nihai Hedef (1 Milyon $)</p>
               <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{progressPct.toFixed(1)}</p>
             </div>
 
@@ -433,14 +493,14 @@ const Goals = () => {
                 <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(Math.max(goalTRY - grandTotal, 0))}</p>
                 <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${Math.max((goalTRY - grandTotal) / usdRate, 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               </div>
-              </div>
+            </div>
           </div>
 
           {/* Ara Hedef (Milestone) Kartı - Tüm Varlıklar Bazlı */}
           <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <div>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Hedef</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Baraj</p>
                 <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>${nextMilestoneUSD.toLocaleString('en-US')}</p>
               </div>
               <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{milestoneProgressPct.toFixed(1)}</p>
@@ -467,12 +527,12 @@ const Goals = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
                    <div>
                       <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneDinamik !== null ? `${fireData.monthsToMilestoneDinamik} ay` : '---'}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dinamik Getiri</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dinamik Hızla</p>
                    </div>
                    <div style={{ width: '1px', height: '30px', background: 'var(--border)' }} />
                    <div>
                       <p style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>{fireData.monthsToMilestoneSabit !== null ? `${fireData.monthsToMilestoneSabit} ay` : '---'}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Sabit Getiri</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Sabit %8 ile</p>
                    </div>
                 </div>
               </div>
@@ -755,12 +815,36 @@ const Goals = () => {
                           <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(fireData.fireTargetTRY)}</p>
                           <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${fireData.fireTargetUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
                         </div>
-                        <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
-                          <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Yıllıklandırılmış Getiri</p>
+                        <div 
+                          onMouseEnter={() => setShowReturnDetails(true)} 
+                          onMouseLeave={() => setShowReturnDetails(false)}
+                          style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px', position: 'relative', cursor: 'help' }}
+                        >
+                          <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>
+                            Yıllıklandırılmış Getiri ⓘ
+                          </p>
                           <p style={{ fontSize: '15px', fontWeight: '800', color: currentAylikGetiri >= 0 ? 'var(--green)' : 'var(--red)' }}>
                             %{isHidden ? '••' : ((Math.pow(1 + currentAylikGetiri, 12) - 1) * 100).toFixed(1)}
                           </p>
                           <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Dolar (USD) Bazlı</p>
+
+                          {showReturnDetails && fireMode === 'dinamik' && (
+                            <div style={{ position: 'absolute', top: '100%', left: '0', background: 'var(--bg-primary)', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 50, width: '180px', boxShadow: 'var(--shadow-md)', marginTop: '8px' }}>
+                              <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px' }}>Hesaplama Detayı (USD)</p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-primary)' }}>BES (%{(fireData.besW * 100).toFixed(0)}):</span>
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: fireData.besAnnPct >= 0 ? 'var(--green)' : 'var(--red)' }}>%{fireData.besAnnPct.toFixed(1)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-primary)' }}>Döviz (%{(fireData.usdW * 100).toFixed(0)}):</span>
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: fireData.usdAnnPct >= 0 ? 'var(--green)' : 'var(--red)' }}>%{fireData.usdAnnPct.toFixed(1)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-primary)' }}>TL Büyüme (%{(fireData.tryW * 100).toFixed(0)}):</span>
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: fireData.tryAnnPct >= 0 ? 'var(--green)' : 'var(--red)' }}>%{fireData.tryAnnPct.toFixed(1)}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -783,7 +867,7 @@ const Goals = () => {
                       <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
                         Aylık tasarrufunuz ortalama <strong>{fc(fireData.avgMonthlySaving)}</strong> baz alındı. 
                         {fireMode === 'dinamik' 
-                          ? ` Ağırlıklı büyüme hızı (%${(fireData.besWeight * 100).toFixed(0)} BES, %${(fireData.otherWeight * 100).toFixed(0)} Diğer) üzerinden hesaplandı.` 
+                          ? ` Büyüme hızı aktif yatırımlarınız (%${(fireData.besW * 100).toFixed(0)} BES, %${(fireData.usdW * 100).toFixed(0)} Döviz, %${(fireData.tryW * 100).toFixed(0)} TL) üzerinden hesaplanıp toplam sermayeye uygulandı.` 
                           : ' Portföy için yıllık reel %8 büyüme varsayıldı.'}
                       </p>
 
@@ -853,7 +937,7 @@ const Goals = () => {
                           {m.reached ? (
                             <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', background: 'var(--green-dim)', padding: '2px 8px', borderRadius: '10px' }}>Ulaşıldı ✓</span>
                           ) : isNext ? (
-                            <span style={{ fontSize: '11px', fontWeight: '700', color: 'white', background: 'var(--accent)', padding: '2px 8px', borderRadius: '10px' }}>Milestone</span>
+                            <span style={{ fontSize: '11px', fontWeight: '700', color: 'white', background: 'var(--accent)', padding: '2px 8px', borderRadius: '10px' }}>Sıradaki Baraj</span>
                           ) : null}
                         </div>
 
@@ -878,14 +962,14 @@ const Goals = () => {
                         {!m.reached && (
                           <div style={{ display: 'flex', gap: '16px', marginTop: '10px', background: isNext ? 'var(--accent-dim)' : 'var(--bg-elevated)', padding: '10px', borderRadius: '10px', border: `1px solid ${isNext ? 'var(--accent)' : 'var(--border)'}` }}>
                             <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '2px' }}>DİNAMİK GETİRİ</p>
+                              <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '2px' }}>DİNAMİK HIZLA</p>
                               <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
                                 {m.monthsDinamik !== null ? `${Math.floor(m.monthsDinamik / 12)}y ${m.monthsDinamik % 12}a` : '---'}
                               </p>
                             </div>
                             <div style={{ width: '1px', background: 'var(--border)' }} />
                             <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '2px' }}>SABİT GETİRİ</p>
+                              <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '2px' }}>SABİT %8 İLE</p>
                               <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
                                 {m.monthsSabit !== null ? `${Math.floor(m.monthsSabit / 12)}y ${m.monthsSabit % 12}a` : '---'}
                               </p>
