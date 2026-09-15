@@ -163,10 +163,17 @@ const Dashboard = () => {
       if (!groups[type]) groups[type] = {
         type, label: ASSET_LABELS[type] || type,
         name: ASSET_LABELS[type] || type,
-        value: 0, cost: 0, items: []
+        value: 0, cost: 0, costUSD: 0, items: []
       }
       groups[type].value += getAssetValue(asset)
-      groups[type].cost += getCostValue(asset)
+      
+      const costTRY = getCostValue(asset)
+      groups[type].cost += costTRY
+
+      // HATA DÜZELTİLDİ: 'doviz' listeden çıkarıldı. Döviz varlıklarının alış maliyeti TL bazlıdır.
+      const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
+      groups[type].costUSD += isUSDAsset ? (Number(asset.avg_cost || 0) * Number(asset.quantity)) : (costTRY / usdRate)
+
       groups[type].items.push(asset)
     })
     return Object.values(groups).filter((g: any) => g.value > 0).sort((a: any, b: any) => b.value - a.value)
@@ -174,10 +181,19 @@ const Dashboard = () => {
 
   const pieData = groupByType()
   const activeAssets = assets.filter((a: any) => ['bes', 'vadeli', 'nakit'].includes(a.type) || Number(a.quantity) > 0)
+  
   const total = activeAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
   const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a), 0)
-  const totalGain = total - totalCost
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
+  
+  const totalCostUSD = activeAssets.reduce((sum, a) => {
+    const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
+    return sum + (isUSDAsset ? (Number(a.avg_cost || 0) * Number(a.quantity)) : (getCostValue(a) / usdRate))
+  }, 0)
+
+  const isDispUSD = displayCurrency === 'USD'
+  const dispTotalCost = isDispUSD ? totalCostUSD : totalCost
+  const dispTotalGain = (isDispUSD ? total / usdRate : total) - dispTotalCost
+  const dispTotalGainPct = dispTotalCost > 0 ? (dispTotalGain / dispTotalCost) * 100 : 0
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
@@ -186,6 +202,13 @@ const Dashboard = () => {
     }
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
+  
+  const formatExact = (val: number, isUSD: boolean) => {
+    if (isHidden) return '••••••'
+    if (isUSD) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val)
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
+  }
+
   const fp = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
 
   if (loading) return (
@@ -307,18 +330,18 @@ const Dashboard = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
         <div style={{ ...card, padding: '14px', minWidth: 0 }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Yatırılan</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fc(totalCost)}</p>
+          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatExact(dispTotalCost, isDispUSD)}</p>
         </div>
         <div style={{ ...card, padding: '14px', minWidth: 0 }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Kar/Zarar</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: totalGain >= 0 ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {totalGain >= 0 ? '+' : ''}{fc(totalGain)}
+          <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGain >= 0 ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {dispTotalGain >= 0 ? '+' : ''}{formatExact(dispTotalGain, isDispUSD)}
           </p>
         </div>
         <div style={{ ...card, padding: '14px', minWidth: 0 }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Getiri</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: totalGainPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {fp(totalGainPct)}
+          <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGainPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {fp(dispTotalGainPct)}
           </p>
         </div>
       </div>
@@ -468,8 +491,15 @@ const Dashboard = () => {
           </div>
         ) : (
           pieData.map((group: any, gi: number) => {
-            const groupGain = group.value - group.cost
-            const groupGainPct = group.cost > 0 ? (groupGain / group.cost) * 100 : 0
+            const groupGainTRY = group.value - group.cost
+            const groupGainPctTRY = group.cost > 0 ? (groupGainTRY / group.cost) * 100 : 0
+            
+            const groupValueUSD = group.value / usdRate
+            const groupGainUSD = groupValueUSD - group.costUSD
+            const groupGainPctUSD = group.costUSD > 0 ? (groupGainUSD / group.costUSD) * 100 : 0
+            
+            const dispGroupGainPct = isDispUSD ? groupGainPctUSD : groupGainPctTRY
+
             return (
               <div key={gi} style={{ marginBottom: '8px' }}>
                 <div onClick={() => {
@@ -491,9 +521,9 @@ const Dashboard = () => {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(group.value)}</p>
-                    {group.cost > 0 && (
-                      <p style={{ fontSize: '11px', fontWeight: '600', color: groupGain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {fp(groupGainPct)}
+                    {(isDispUSD ? group.costUSD > 0 : group.cost > 0) && (
+                      <p style={{ fontSize: '11px', fontWeight: '600', color: dispGroupGainPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                        {fp(dispGroupGainPct)}
                       </p>
                     )}
                   </div>
