@@ -4,7 +4,7 @@ import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { fetchSnapshots } from '../lib/snapshot'
 import { calculateComparison } from '../lib/comparison'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const Analytics = () => {
@@ -88,28 +88,57 @@ const Analytics = () => {
     return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })}`
   }
 
-  const chartData = snapshots.map((s: any) => {
-    const performanceValue = Number(s.performance_value || 0)
-    const performanceCost = Number(s.performance_cost || 0)
-  
-    const hasPerformanceData = performanceValue > 0 || performanceCost > 0
+  const firstSnapshotDate = snapshots.length > 0 ? new Date(snapshots[0].snapshot_date).getTime() : 0;
+  const initialValue = snapshots.length > 0 ? Number(snapshots[0].total_value || 0) : 0;
+
+  let previousCost = 0;
+  let runningQqqmValue = 0;
+
+  const chartData = snapshots.map((s: any, index: number) => {
+    const performanceValue = Number(s.performance_value || 0);
+    const performanceCost = Number(s.performance_cost || 0);
+    const hasPerformanceData = performanceValue > 0 || performanceCost > 0;
+    
+    const currentCost = Number(s.total_cost || 0);
+    const currentValue = Number(s.total_value || 0);
+
+    // Günlük QQQM Dalgalanma Simülasyonu (Gerçek API gelene kadar)
+    // Her gün ~%0.05 büyüme ve sinüs dalgasıyla ±%0.4 günlük dalgalanma yaratır
+    const dailyMockReturn = 1 + (Math.sin(index * 0.8) * 0.004) + 0.0005; 
+
+    if (index === 0) {
+      // 1. Gün: Benchmark doğrudan güncel portföy değeriyle başlar
+      runningQqqmValue = currentValue;
+      previousCost = currentCost;
+    } else {
+      // 2. Diğer Günler: Önceki bakiye borsa hareketiyle değerlenir
+      runningQqqmValue = runningQqqmValue * dailyMockReturn;
+      
+      // 3. Nakit Akışı Kontrolü: O gün portföye yeni para girdiyse QQQM'e de eklenir
+      const costDelta = currentCost - previousCost;
+      if (costDelta !== 0) {
+        runningQqqmValue += costDelta;
+      }
+      previousCost = currentCost;
+    }
   
     return {
       date: formatDate(s.snapshot_date),
-  
-      // Portföy Büyümesi grafiği için
-      deger: Number(s.total_value || 0),
-      maliyet: Number(s.total_cost || 0),
-  
-      // Kar/Zarar Performansı grafiği için
+      deger: currentValue,
+      maliyet: currentCost,
+      qqqmDeger: runningQqqmValue,
       performansDeger: hasPerformanceData ? performanceValue : null,
       performansMaliyet: hasPerformanceData ? performanceCost : null,
       kar: hasPerformanceData ? performanceValue - performanceCost : null,
-  
       hasPerformanceData
     }
   })
-  
+
+  // Banner (Tepe Bar) hesaplamaları
+  const lastData = chartData[chartData.length - 1];
+  const qqqmDiff = lastData ? lastData.deger - lastData.qqqmDeger : 0;
+  const qqqmDiffPct = lastData && lastData.qqqmDeger > 0 ? (qqqmDiff / lastData.qqqmDeger) * 100 : 0;
+  const isBehind = qqqmDiff < 0;
   const performanceChartData = chartData.filter(d => d.hasPerformanceData)
 
   const first = chartData[0]?.deger || 0
@@ -397,55 +426,57 @@ const Analytics = () => {
               </div>
 
               <div style={{ ...card, marginBottom: '16px' }}>
-                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>
-                  Portföy Büyümesi
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Portföy vs Benchmark (QQQM)</p>
+                </div>
 
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={chartData}>
+                {lastData && (
+                  <div style={{ background: isBehind ? '#fef2f2' : '#f0fdf4', border: `1px solid ${isBehind ? '#fecaca' : '#bbf7d0'}`, borderRadius: '8px', padding: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>{isBehind ? '📉' : '📈'}</span>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      Portföy, son döneme göre QQQM'in <strong style={{ color: isBehind ? 'var(--red)' : 'var(--green)' }}>{isHidden ? '••••••' : fc(Math.abs(qqqmDiff))} ({Math.abs(qqqmDiffPct).toFixed(2)}%)</strong> {isBehind ? 'gerisinde.' : 'önünde!'}
+                    </p>
+                  </div>
+                )}
+
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorDeger" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
 
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fill: '#9ca3af', fontSize: 10 }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                    />
-
-                    <YAxis
-                      tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={v => `${(v / 1000).toFixed(0)}K`}
-                    />
+                    <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={20} />
+                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
 
                     <Tooltip
-                      formatter={(val: any) => fc(Number(val))}
-                      contentStyle={{
-                        background: 'white',
-                        border: '1px solid var(--border)',
-                        borderRadius: '10px',
-                        fontSize: '12px',
-                        boxShadow: 'var(--shadow-md)'
-                      }}
+                      formatter={(val: any, name: any) => [
+                        fc(Number(val)), 
+                        name === 'deger' ? 'Portföy' : name === 'qqqmDeger' ? 'QQQM (Benchmark)' : 'Yatırılan Ana Para'
+                      ]}
+                      contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', boxShadow: 'var(--shadow-md)' }}
                     />
 
-                    <Area
-                      type="monotone"
-                      dataKey="deger"
-                      name="Portföy Değeri"
-                      stroke="#6366f1"
-                      fill="url(#colorDeger)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
+                    {/* Portföy - Mavi Alan */}
+                    <Area type="monotone" dataKey="deger" name="deger" stroke="#3b82f6" fill="url(#colorDeger)" strokeWidth={2} isAnimationActive={false} /> 
+
+                    {/* QQQM (Benchmark) - Turuncu Çizgi */}
+                    <Line type="monotone" dataKey="qqqmDeger" name="qqqmDeger" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
+
+                    {/* Yatırılan (Invested) - Kesik Çizgi */}
+                    <Line type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
+                  
+                  </ComposedChart>
                 </ResponsiveContainer>
+                
+                {/* Alt Lejant (Göstergeler) */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} /><span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Portföy</span></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} /><span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>QQQM</span></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }} /><span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Yatırılan</span></div>
+                </div>
               </div>
 
               <div style={{ ...card, marginBottom: '16px' }}>
@@ -543,7 +574,7 @@ const Analytics = () => {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" defaultValue={totalCost} id="compTotalCost"
+                        <input type="number" placeholder={Math.round(totalCost).toString()} id="compTotalCost"
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <button onClick={async () => {
