@@ -45,6 +45,14 @@ const Assets = () => {
   const [rateNotFound, setRateNotFound] = useState(false)
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set())
 
+  // --- DÜZENLEME (EDIT) STATE'LERİ ---
+  const [editAsset, setEditAsset] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', symbol: '', quantity: '', avg_cost: '', strategy: 'Core', sector: '', coingecko_id: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [editSearchResults, setEditSearchResults] = useState<any[]>([])
+  const [editSearching, setEditSearching] = useState(false)
+
   const [txAsset, setTxAsset] = useState<any | null>(null)
   const [txType, setTxType] = useState<'buy' | 'sell'>('buy')
   const [txForm, setTxForm] = useState({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
@@ -86,20 +94,20 @@ const Assets = () => {
   const isVadeli = form.type === 'vadeli'
   const isUSD = (type: string) => ['usd_hisse', 'kripto', 'etf'].includes(type)
 
-  const handleSymbolSearch = async (value: string) => {
-    setForm({ ...form, symbol: value })
-    if (value.length < 2) { setSearchResults([]); return }
-    if (form.type === 'kripto') {
-      setSearching(true)
+  // ORTAK ARAMA FONKSİYONU (Hem yeni ekleme hem düzenleme için)
+  const executeSearch = async (value: string, type: string, setSearchingFn: any, setResultsFn: any) => {
+    if (value.length < 2) { setResultsFn([]); return }
+    if (type === 'kripto') {
+      setSearchingFn(true)
       try {
         const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${value}`)
         const data = await res.json()
-        setSearchResults(data.coins || [])
-      } catch { setSearchResults([]) }
-      setSearching(false)
+        setResultsFn(data.coins || [])
+      } catch { setResultsFn([]) }
+      setSearchingFn(false)
       return
     }
-    if (form.type === 'altin') {
+    if (type === 'altin') {
       const METALS = [
         { symbol: 'TRYG', name: 'Gram Altın' }, { symbol: 'CEYREK', name: 'Çeyrek Altın' },
         { symbol: 'YARIM', name: 'Yarım Altın' }, { symbol: 'TAM', name: 'Tam Altın' },
@@ -108,11 +116,11 @@ const Assets = () => {
         { symbol: 'GRAMGUMUS', name: 'Gram Gümüş' },
       ]
       const filtered = METALS.filter(m => m.symbol.toLowerCase().includes(value.toLowerCase()) || m.name.toLowerCase().includes(value.toLowerCase()))
-      setSearchResults(filtered.map(m => ({ ...m, type: 'METAL', exchange: 'TR' })))
+      setResultsFn(filtered.map(m => ({ ...m, type: 'METAL', exchange: 'TR' })))
       return
     }
-    if (form.type === 'fon') { setSearchResults([]); return }
-    if (form.type === 'doviz') {
+    if (type === 'fon') { setResultsFn([]); return }
+    if (type === 'doviz') {
       const CURRENCIES = [
         { symbol: 'USD', name: 'Amerikan Doları' }, { symbol: 'EUR', name: 'Euro' },
         { symbol: 'GBP', name: 'İngiliz Sterlini' }, { symbol: 'CHF', name: 'İsviçre Frangı' },
@@ -121,17 +129,27 @@ const Assets = () => {
         { symbol: 'RUB', name: 'Rus Rublesi' }, { symbol: 'CNY', name: 'Çin Yuanı' },
       ]
       const filtered = CURRENCIES.filter(c => c.symbol.toLowerCase().includes(value.toLowerCase()) || c.name.toLowerCase().includes(value.toLowerCase()))
-      setSearchResults(filtered.map(c => ({ ...c, type: 'CURRENCY', exchange: 'TRY' })))
+      setResultsFn(filtered.map(c => ({ ...c, type: 'CURRENCY', exchange: 'TRY' })))
       return
     }
-    setSearching(true)
+    setSearchingFn(true)
     const { searchTicker } = await import('../lib/search')
     const results = await searchTicker(value)
     const typeMap: Record<string, string> = { hisse: 'EQUITY', usd_hisse: 'EQUITY', etf: 'ETF' }
-    const wantedType = typeMap[form.type]
+    const wantedType = typeMap[type]
     const filtered = wantedType ? results.filter((r: any) => r.type === wantedType) : results
-    setSearchResults(filtered.slice(0, 5))
-    setSearching(false)
+    setResultsFn(filtered.slice(0, 5))
+    setSearchingFn(false)
+  }
+
+  const handleSymbolSearch = (value: string) => {
+    setForm({ ...form, symbol: value })
+    executeSearch(value, form.type, setSearching, setSearchResults)
+  }
+
+  const handleEditSymbolSearch = (value: string) => {
+    setEditForm({ ...editForm, symbol: value })
+    executeSearch(value, editAsset.type, setEditSearching, setEditSearchResults)
   }
 
   const handleSave = async () => {
@@ -197,6 +215,48 @@ const Assets = () => {
     fetchData()
     refresh(true)
     setSaving(false)
+    setTimeout(() => setSuccess(''), 3000)
+  }
+
+  // --- DÜZENLEME (EDIT) FONKSİYONLARI ---
+  const openEditModal = (asset: any) => {
+    setEditAsset(asset)
+    setEditError('')
+    setEditForm({
+      name: asset.name || '',
+      symbol: asset.symbol || '',
+      quantity: asset.quantity ? String(asset.quantity) : '',
+      avg_cost: asset.avg_cost ? String(asset.avg_cost) : '',
+      strategy: asset.strategy || 'Core',
+      sector: asset.sector || '',
+      coingecko_id: asset.coingecko_id || ''
+    })
+    setEditSearchResults([])
+  }
+
+  const handleEditSave = async () => {
+    if (!editForm.name || !editForm.quantity || !editForm.avg_cost) {
+       setEditError('Ad, adet ve ortalama maliyet zorunludur.')
+       return
+    }
+    setEditSaving(true)
+    const payload = {
+      name: editForm.name,
+      symbol: editForm.symbol.toUpperCase(),
+      quantity: Number(editForm.quantity),
+      avg_cost: Number(editForm.avg_cost),
+      strategy: editAsset.type === 'usd_hisse' ? editForm.strategy : null,
+      sector: editAsset.type === 'usd_hisse' ? editForm.sector : null,
+      coingecko_id: editForm.coingecko_id || null
+    }
+    const { error } = await supabase.from('assets').update(payload).eq('id', editAsset.id)
+    if (error) { setEditError(error.message); setEditSaving(false); return }
+
+    setEditSaving(false)
+    setEditAsset(null)
+    fetchData()
+    refresh(true)
+    setSuccess('Varlık başarıyla düzenlendi!')
     setTimeout(() => setSuccess(''), 3000)
   }
 
@@ -354,6 +414,73 @@ const Assets = () => {
 
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
+      
+      {/* Düzenleme (Edit) Modalı */}
+      {editAsset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'white', borderRadius: '20px 20px 0 0', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 -8px 32px rgba(0,0,0,0.12)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>Varlığı Düzenle</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{editAsset.name}</p>
+              </div>
+              <button onClick={() => setEditAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={labelStyle}>Varlık Adı</label>
+              <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: '12px', position: 'relative' }}>
+              <label style={labelStyle}>Sembol</label>
+              <input value={editForm.symbol} onChange={e => handleEditSymbolSearch(e.target.value)} style={inputStyle} />
+              {editSearching && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>Aranıyor...</p>}
+              {editSearchResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
+                  {editSearchResults.map((r: any) => (
+                    <div key={r.symbol} onClick={() => { 
+                        let cleanSymbol = r.symbol; 
+                        if (editAsset.type === 'hisse') cleanSymbol = r.symbol.replace('.IS', ''); 
+                        setEditForm({ ...editForm, symbol: cleanSymbol, name: r.name, coingecko_id: r.id || '' }); 
+                        setEditSearchResults([]); 
+                      }}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
+                      <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{r.symbol}</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{r.name} · {r.exchange}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div><label style={labelStyle}>Adet</label><input type="number" value={editForm.quantity} onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Ortalama Maliyet {isUSD(editAsset.type) ? '($)' : '(₺)'}</label><input type="number" value={editForm.avg_cost} onChange={e => setEditForm({ ...editForm, avg_cost: e.target.value })} style={inputStyle} /></div>
+            </div>
+
+            {editAsset.type === 'usd_hisse' && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>Strateji</label>
+                <select value={editForm.strategy} onChange={e => setEditForm({ ...editForm, strategy: e.target.value })} style={inputStyle}>
+                  <option value="Core">Core</option>
+                  <option value="Value">Value</option>
+                  <option value="Growth">Growth</option>
+                </select>
+              </div>
+            )}
+
+            {editError && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{editError}</div>}
+            
+            <button onClick={handleEditSave} disabled={editSaving} style={{ width: '100%', padding: '14px', background: '#3b82f6', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: editSaving ? 0.7 : 1 }}>
+              {editSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* İşlem Modalı */}
       {txAsset && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
@@ -445,6 +572,7 @@ const Assets = () => {
           </div>
         </div>
       )}
+      
       {/* Manuel Varlık Güncelleme Modalı */}
       {manualAsset && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
@@ -507,6 +635,7 @@ const Assets = () => {
           </div>
         </div>
       )}
+      
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingTop: '16px' }}>
         <div>
@@ -523,6 +652,7 @@ const Assets = () => {
           ✅ {success}
         </div>
       )}
+      
       {/* Yeni Varlık Formu */}
       {showForm && (
         <div style={{ ...card, marginBottom: '16px' }}>
@@ -677,7 +807,10 @@ const Assets = () => {
                           <button onClick={() => openManualUpdateModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Güncelle</button>
                         )}
                         {!isManualAsset && (
-                          <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
+                          <>
+                            <button onClick={() => openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
+                            <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
+                          </>
                         )}
                         <button onClick={() => handleDelete(asset.id)} style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '8px', color: 'var(--red)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Sil</button>
                       </div>

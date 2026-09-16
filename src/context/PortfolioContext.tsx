@@ -12,6 +12,8 @@ interface PortfolioContextType {
   lastUpdated: Date | null
   portfolioId: string | null
   refresh: (force?: boolean) => Promise<void>
+  isHidden: boolean
+  setIsHidden: (hidden: boolean) => void
 }
 
 const PortfolioContext = createContext<PortfolioContextType>({} as any)
@@ -109,15 +111,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       }
       
       const isPerformanceAsset = (a: any) => {
-        // TRY nakit kar/zarar performansına dahil edilmez
-        if (['nakit', 'try', 'TRY'].includes(a.type)) return false
+        // BES (Bireysel Emeklilik), hantal yapısı gereği aktif performans (QQQM benchmark) yarışına DAHİL EDİLMEZ.
+        if (a.type === 'bes') return false;
       
-        // BES sadece maliyet girildiyse performansa dahil edilir
-        if (a.type === 'bes') {
-          return Number(a.principal ?? a.avg_cost ?? 0) > 0
-        }
-      
-        return true
+        // Nakit, döviz, vadeli mevduat, fon, kripto ve hisseler aktif yatırım tercihleridir. 
+        // Nakitte beklemek piyasa fırsat maliyetini (veya krizden korunmayı) yansıttığı için performansta KALIR.
+        return true;
       }
       
       const tv = loaded.reduce((sum: number, a: any) => {
@@ -125,8 +124,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       }, 0)
       
       const tc = loaded.reduce((sum: number, a: any) => {
-        // Portföy Büyümesi grafiğindeki maliyet çizgisi mevcut mantıkla devam etsin
-        if (['bes', 'vadeli'].includes(a.type)) return sum
+        // HATA DÜZELTİLDİ: Tüm servet maliyetine (Portföy Büyümesi grafiği için) BES ve Vadeli dahil her şey eklenir.
         return sum + getCostValue(a)
       }, 0)
       

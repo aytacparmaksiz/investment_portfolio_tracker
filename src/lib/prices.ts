@@ -17,6 +17,7 @@ const CRYPTO_IDS: Record<string, string> = {
   LTC: 'litecoin',
   // Yeni eklenen Pharaoh Liquid Staking Token
   P33: 'pharaoh-liquid-staking-token',
+  USDC: 'usd-coin',
 }
 
 
