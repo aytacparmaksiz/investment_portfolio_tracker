@@ -1,28 +1,13 @@
 import { useState, useEffect } from 'react'
+import { isUSD } from '../lib/calculations'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions, deleteTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
-
-const ASSET_TYPES = [
-  { value: 'hisse', label: 'BIST Hisse', hasSymbol: true, symbolPlaceholder: 'THYAO, GARAN...', currency: 'TRY' },
-  { value: 'usd_hisse', label: 'ABD Hisse', hasSymbol: true, symbolPlaceholder: 'AAPL, TSLA...', currency: 'USD' },
-  { value: 'kripto', label: '₿ Kripto', hasSymbol: true, symbolPlaceholder: 'BTC, ETH...', currency: 'USD' },
-  { value: 'etf', label: '📈 ETF', hasSymbol: true, symbolPlaceholder: 'SPY, QQQ...', currency: 'USD' },
-  { value: 'doviz', label: '💱 Döviz', hasSymbol: true, symbolPlaceholder: 'USD, EUR, GBP...', currency: 'TRY' },
-  { value: 'altin', label: '🥇 Altın', hasSymbol: true, symbolPlaceholder: 'TRYG, CEYREK...', currency: 'TRY' },
-  { value: 'fon', label: '📊 TEFAS Fon', hasSymbol: true, symbolPlaceholder: 'TP2, AFT...', currency: 'TRY' },
-  { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
-  { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
-  { value: 'nakit', label: '💵 TRY Nakit', hasSymbol: false, currency: 'TRY' },
-]
-
-const ASSET_LABELS: Record<string, string> = {
-  hisse: '🇹🇷 BIST', usd_hisse: '🇺🇸 ABD', kripto: '₿ Kripto',
-  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 Fon', nakit: '💵 Nakit', bes: '🏦 BES', vadeli: '💰 Vadeli'
-}
+import { ASSET_TYPES, ASSET_LABELS } from '../lib/constants'
+import { useAssetSearch } from '../hooks/useAssetSearch'
 
 const Assets = () => {
   const { user } = useAuth()
@@ -50,8 +35,7 @@ const Assets = () => {
   const [editForm, setEditForm] = useState({ name: '', symbol: '', quantity: '', avg_cost: '', strategy: 'Core', sector: '', coingecko_id: '' })
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
-  const [editSearchResults, setEditSearchResults] = useState<any[]>([])
-  const [editSearching, setEditSearching] = useState(false)
+  const { executeSearch: executeEditSearch, searchResults: editSearchResults, setSearchResults: setEditSearchResults, searching: editSearching } = useAssetSearch()
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
   const [txType, setTxType] = useState<'buy' | 'sell'>('buy')
@@ -61,8 +45,7 @@ const Assets = () => {
   const [txSaving, setTxSaving] = useState(false)
   const [txError, setTxError] = useState('')
   
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [searching, setSearching] = useState(false)
+  const { executeSearch: executeAddSearch, searchResults, setSearchResults, searching } = useAssetSearch()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   
   const [manualAsset, setManualAsset] = useState<any | null>(null)
@@ -76,7 +59,7 @@ const Assets = () => {
 
   const fetchData = async () => {
     const { data: portfolios } = await supabase
-      .from('portfolios').select('id').eq('user_id', user.id)
+      .from('portfolios').select('id').eq('user_id', user?.id)
     if (portfolios?.length) {
       setPortfolioId(portfolios[0].id)
       const { data } = await supabase
@@ -92,64 +75,16 @@ const Assets = () => {
   const selectedType = ASSET_TYPES.find(t => t.value === form.type)
   const isManual = ['bes', 'vadeli', 'nakit'].includes(form.type)
   const isVadeli = form.type === 'vadeli'
-  const isUSD = (type: string) => ['usd_hisse', 'kripto', 'etf'].includes(type)
 
-  // ORTAK ARAMA FONKSİYONU (Hem yeni ekleme hem düzenleme için)
-  const executeSearch = async (value: string, type: string, setSearchingFn: any, setResultsFn: any) => {
-    if (value.length < 2) { setResultsFn([]); return }
-    if (type === 'kripto') {
-      setSearchingFn(true)
-      try {
-        const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${value}`)
-        const data = await res.json()
-        setResultsFn(data.coins || [])
-      } catch { setResultsFn([]) }
-      setSearchingFn(false)
-      return
-    }
-    if (type === 'altin') {
-      const METALS = [
-        { symbol: 'TRYG', name: 'Gram Altın' }, { symbol: 'CEYREK', name: 'Çeyrek Altın' },
-        { symbol: 'YARIM', name: 'Yarım Altın' }, { symbol: 'TAM', name: 'Tam Altın' },
-        { symbol: 'CUMHURIYET', name: 'Cumhuriyet Altını' }, { symbol: 'ATA', name: 'Ata Altın' },
-        { symbol: 'XAU', name: 'Ons Altın' }, { symbol: 'XAG', name: 'Gümüş (Ons)' },
-        { symbol: 'GRAMGUMUS', name: 'Gram Gümüş' },
-      ]
-      const filtered = METALS.filter(m => m.symbol.toLowerCase().includes(value.toLowerCase()) || m.name.toLowerCase().includes(value.toLowerCase()))
-      setResultsFn(filtered.map(m => ({ ...m, type: 'METAL', exchange: 'TR' })))
-      return
-    }
-    if (type === 'fon') { setResultsFn([]); return }
-    if (type === 'doviz') {
-      const CURRENCIES = [
-        { symbol: 'USD', name: 'Amerikan Doları' }, { symbol: 'EUR', name: 'Euro' },
-        { symbol: 'GBP', name: 'İngiliz Sterlini' }, { symbol: 'CHF', name: 'İsviçre Frangı' },
-        { symbol: 'JPY', name: 'Japon Yeni' }, { symbol: 'CAD', name: 'Kanada Doları' },
-        { symbol: 'AUD', name: 'Avustralya Doları' }, { symbol: 'SEK', name: 'İsveç Kronu' },
-        { symbol: 'RUB', name: 'Rus Rublesi' }, { symbol: 'CNY', name: 'Çin Yuanı' },
-      ]
-      const filtered = CURRENCIES.filter(c => c.symbol.toLowerCase().includes(value.toLowerCase()) || c.name.toLowerCase().includes(value.toLowerCase()))
-      setResultsFn(filtered.map(c => ({ ...c, type: 'CURRENCY', exchange: 'TRY' })))
-      return
-    }
-    setSearchingFn(true)
-    const { searchTicker } = await import('../lib/search')
-    const results = await searchTicker(value)
-    const typeMap: Record<string, string> = { hisse: 'EQUITY', usd_hisse: 'EQUITY', etf: 'ETF' }
-    const wantedType = typeMap[type]
-    const filtered = wantedType ? results.filter((r: any) => r.type === wantedType) : results
-    setResultsFn(filtered.slice(0, 5))
-    setSearchingFn(false)
-  }
 
   const handleSymbolSearch = (value: string) => {
     setForm({ ...form, symbol: value })
-    executeSearch(value, form.type, setSearching, setSearchResults)
+    executeAddSearch(value, form.type)
   }
 
   const handleEditSymbolSearch = (value: string) => {
     setEditForm({ ...editForm, symbol: value })
-    executeSearch(value, editAsset.type, setEditSearching, setEditSearchResults)
+    executeEditSearch(value, editAsset.type)
   }
 
   const handleSave = async () => {
@@ -823,22 +758,7 @@ const Assets = () => {
         })()}
       </div>
 
-      {/* Alt Navigasyon Sıralaması */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
-        {[
-          { path: '/', icon: '📊', label: 'Portföy' },
-          { path: '/performans', icon: '📈', label: 'Performans' },
-          { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
-        ].map(item => (
-          <button key={item.path} onClick={() => navigate(item.path)}
-            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>
-            <span style={{ fontSize: '18px' }}>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </div>
+
     </div>
   )
 }

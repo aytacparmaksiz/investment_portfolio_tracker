@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { FALLBACK_USD_RATE } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { fetchSnapshots } from '../lib/snapshot'
 import { calculateComparison } from '../lib/comparison'
+import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -35,15 +37,13 @@ const Analytics = () => {
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
-      const usdRateLocal = prices['USDTRY=X'] || 46.4
+      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
       const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
       const groups: Record<string, any[]> = {}
       filtered.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
       const sorted = Object.entries(groups).sort((a, b) => {
         const sumValue = (items: any[]) => items.reduce((s, asset) => {
-          const isU = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
-          const p = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isU ? usdRateLocal : 1) : 0)
-          return s + p * Number(asset.quantity)
+          return s + getCurrentValue(asset, prices, usdRateLocal)
         }, 0)
         return sumValue(b[1]) - sumValue(a[1])
       })
@@ -87,62 +87,61 @@ const Analytics = () => {
   }
 
   // --- GRAFİK VERİSİ HESAPLAMASI ---
-  const todayRaw = new Date().toISOString().split('T')[0];
-  let runningQqqmValue = 0;
-  let runningInvested = 0;
-  let previousActiveCost = 0;
-  let benchmarkStarted = false;
+  const chartData = useMemo(() => {
+    const todayRaw = new Date().toISOString().split('T')[0];
+    let runningQqqmValue = 0;
+    let runningInvested = 0;
+    let previousActiveCost = 0;
+    let benchmarkStarted = false;
 
-  const chartData = snapshots.map((s: any, index: number) => {
-    // 1. TÜM SERVET VERİLERİ (BES Dahil - Geçmişten Bugüne)
-    const totalV = Number(s.total_value || 0);
-    const totalC = Number(s.total_cost || 0);
-    const totalKar = totalC > 0 ? totalV - totalC : 0;
-    
-    // 2. AKTİF PERFORMANS VERİLERİ (BES Hariç - QQQM Yarışı İçin)
-    const activeV = Number(s.performance_value || totalV);
-    const activeC = Number(s.performance_cost || totalC);
+    return snapshots.map((s: any, index: number) => {
+      // 1. TÜM SERVET VERİLERİ (BES Dahil - Geçmişten Bugüne)
+      const totalV = Number(s.total_value || 0);
+      const totalC = Number(s.total_cost || 0);
+      const totalKar = totalC > 0 ? totalV - totalC : 0;
+      
+      // 2. AKTİF PERFORMANS VERİLERİ (BES Hariç - QQQM Yarışı İçin)
+      const activeV = Number(s.performance_value || totalV);
+      const activeC = Number(s.performance_cost || totalC);
 
-    const isTodayOrAfter = s.snapshot_date >= todayRaw || index === snapshots.length - 1; 
+      const isTodayOrAfter = s.snapshot_date >= todayRaw || index === snapshots.length - 1; 
 
-    let qqqm = null;
-    let inv = null;
-    let actV = null;
+      let qqqm = null;
+      let inv = null;
+      let actV = null;
 
-    const dailyMockReturn = 1 + (Math.sin(index * 0.8) * 0.004) + 0.0005; // API gelene kadar dalgalanma
-
-    if (isTodayOrAfter) {
-      if (!benchmarkStarted) {
-         // YARIŞIN MİLADI (1. GÜN)
-         runningQqqmValue = activeV;
-         runningInvested = activeV;
-         previousActiveCost = activeC;
-         benchmarkStarted = true;
-      } else {
-         runningQqqmValue = runningQqqmValue * dailyMockReturn;
-         const costDelta = activeC - previousActiveCost;
-         if (costDelta !== 0) {
-           runningQqqmValue += costDelta;
-           runningInvested += costDelta;
-         }
-         previousActiveCost = activeC;
+      if (isTodayOrAfter) {
+        if (!benchmarkStarted) {
+           // YARIŞIN MİLADI (1. GÜN)
+           runningQqqmValue = activeV;
+           runningInvested = activeV;
+           previousActiveCost = activeC;
+           benchmarkStarted = true;
+        } else {
+           const costDelta = activeC - previousActiveCost;
+           if (costDelta !== 0) {
+             runningQqqmValue += costDelta;
+             runningInvested += costDelta;
+           }
+           previousActiveCost = activeC;
+        }
+        qqqm = runningQqqmValue;
+        inv = runningInvested;
+        actV = activeV;
       }
-      qqqm = runningQqqmValue;
-      inv = runningInvested;
-      actV = activeV;
-    }
 
-    return {
-      date: formatDate(s.snapshot_date),
-      deger: totalV,         
-      maliyet: totalC,       
-      kar: totalKar,         
-      aktifDeger: actV,      
-      aktifMaliyet: inv,     
-      qqqmDeger: qqqm,       
-      hasPerformanceData: true
-    }
-  })
+      return {
+        date: formatDate(s.snapshot_date),
+        deger: totalV,         
+        maliyet: totalC,       
+        kar: totalKar,         
+        aktifDeger: actV,      
+        aktifMaliyet: inv,     
+        qqqmDeger: qqqm,       
+        hasPerformanceData: true
+      }
+    })
+  }, [snapshots])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
   const first = chartData[0]?.deger || 0
@@ -190,7 +189,7 @@ const Analytics = () => {
           hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: '₿ Kripto',
           etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın'
         }
-        const usdRate = prices['USDTRY=X'] || 46.4
+        const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const TYPE_COLORS: Record<string, string> = {
           hisse: '#35D6ED', usd_hisse: '#1A224C', kripto: '#8b5cf6',
           etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2'
@@ -203,9 +202,7 @@ const Analytics = () => {
         })
         const sortedGroupEntries = Object.entries(groups).sort((a, b) => {
           const sumValue = (items: any[]) => items.reduce((s, asset) => {
-            const isU = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
-            const p = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isU ? usdRate : 1) : 0)
-            return s + p * Number(asset.quantity)
+            return s + getCurrentValue(asset, prices, usdRate)
           }, 0)
           return sumValue(b[1]) - sumValue(a[1])
         })
@@ -220,7 +217,6 @@ const Analytics = () => {
               </div>
             ) : (
               sortedGroupEntries.map(([type, items]) => {
-                const isUSD = ['usd_hisse', 'kripto', 'etf'].includes(type)
                 const isExpanded = expandedAssetGroups.has(type)
                 return (
                 <div key={type} style={{ ...card, marginBottom: '12px', borderLeft: `3px solid ${TYPE_COLORS[type] || '#6b7280'}` }}>
@@ -249,9 +245,8 @@ const Analytics = () => {
                       let sectorCost = 0;
                       let sectorValue = 0;
                       secItems.forEach((asset: any) => {
-                        const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * usdRate : 0);
-                        sectorValue += livePrice * Number(asset.quantity);
-                        sectorCost += asset.total_try_cost ? Number(asset.total_try_cost) : ((asset.avg_cost || 0) * usdRate * Number(asset.quantity));
+                        sectorValue += getCurrentValue(asset, prices, usdRate);
+                        sectorCost += getCostValue(asset, usdRate);
                       });
                       const sectorGain = sectorValue - sectorCost;
                       const sectorGainPct = sectorCost > 0 ? (sectorGain / sectorCost) * 100 : 0;
@@ -275,8 +270,8 @@ const Analytics = () => {
                           
                           {isSecExpanded && secItems.map((asset: any, index: number) => {
                             const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * usdRate : 0)
-                            const currentValue = livePrice * Number(asset.quantity)
-                            const costValueTRY = asset.total_try_cost ? Number(asset.total_try_cost) : ((asset.avg_cost || 0) * usdRate * Number(asset.quantity))
+                            const currentValue = getCurrentValue(asset, prices, usdRate)
+                            const costValueTRY = getCostValue(asset, usdRate)
                             const gain = currentValue - costValueTRY
                             const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                             const dailyPct = prices[asset.symbol + '_dailypct']
@@ -331,18 +326,19 @@ const Analytics = () => {
                       )
                     })
                   })() : isExpanded && items.map((asset: any, index: number) => {
-                    const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isUSD ? usdRate : 1) : 0)
-                    const currentValue = livePrice * Number(asset.quantity)
-                    const costValueTRY = isUSD && asset.total_try_cost ? Number(asset.total_try_cost) : (isUSD ? (asset.avg_cost || 0) * usdRate * Number(asset.quantity) : (asset.avg_cost || 0) * Number(asset.quantity))
+                    const isU = isUSD(asset.type)
+                    const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isU ? usdRate : 1) : 0)
+                    const currentValue = getCurrentValue(asset, prices, usdRate)
+                    const costValueTRY = getCostValue(asset, usdRate)
                     const gain = currentValue - costValueTRY
                     const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                     const dailyPct = prices[asset.symbol + '_dailypct']
                     
-                    const unitCostDisplay = isHidden ? '••••••' : (isUSD
+                    const unitCostDisplay = isHidden ? '••••••' : (isU
                       ? `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                       : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
                     
-                    const unitPriceDisplay = isHidden ? '••••••' : (isUSD
+                    const unitPriceDisplay = isHidden ? '••••••' : (isU
                       ? `$${(prices[asset.symbol + '_usd'] ?? (livePrice / usdRate)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
                       : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
 
@@ -635,22 +631,7 @@ const Analytics = () => {
         </>
       )}
 
-      {/* Alt Navigasyon Sıralaması */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
-        {[
-          { path: '/', icon: '📊', label: 'Portföy' },
-          { path: '/performans', icon: '📈', label: 'Performans' },
-          { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
-        ].map(item => (
-          <button key={item.path} onClick={() => navigate(item.path)}
-            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>
-            <span style={{ fontSize: '18px' }}>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </div>
+
     </div>
   )
 }

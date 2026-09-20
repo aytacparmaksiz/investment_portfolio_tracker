@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
+import { FALLBACK_USD_RATE } from '../lib/constants'
 import { fetchAllPrices } from '../lib/prices'
 import { saveSnapshot } from '../lib/snapshot'
+import type { Asset } from '../types'
+import { getCurrentValue, getCostValue, isPerformanceAsset } from '../lib/calculations'
 
 interface PortfolioContextType {
-  assets: any[]
+  assets: Asset[]
   prices: Record<string, number>
   loading: boolean
   pricesLoading: boolean
@@ -16,11 +19,11 @@ interface PortfolioContextType {
   setIsHidden: (hidden: boolean) => void
 }
 
-const PortfolioContext = createContext<PortfolioContextType>({} as any)
+const PortfolioContext = createContext<PortfolioContextType>({} as PortfolioContextType)
 
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth()
-  const [assets, setAssets] = useState<any[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
   const [prices, setPrices] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [pricesLoading, setPricesLoading] = useState(false)
@@ -59,7 +62,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       .in('portfolio_id', allPortfolioIds)
       .order('created_at', { ascending: false })
 
-    const loaded = assetsData || []
+    const loaded: Asset[] = assetsData || []
     setAssets(loaded)
     setLoading(false)
     setHasFetched(true)
@@ -70,72 +73,19 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       setPrices(fetched)
       setLastUpdated(new Date())
 
-      const usdtry = fetched['USDTRY=X'] || 46.4
+      const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
 
-      const getCurrentValue = (a: any) => {
-        if (['bes', 'vadeli'].includes(a.type)) {
-          if (a.type === 'vadeli' && a.principal && a.interest_rate) {
-            const start = new Date(a.start_date || a.created_at)
-            const days = Math.max(
-              0,
-              Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-            )
-            const dailyRate = Number(a.interest_rate) / 365 / 100
-            return Number(a.principal) * (1 + dailyRate * days)
-          }
+      const tv = loaded.reduce((sum, a) => sum + getCurrentValue(a, fetched), 0)
+      const tc = loaded.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
       
-          const vals = a.manual_values || []
-          return Number(vals[vals.length - 1]?.value || 0)
-        }
-      
-        const p = fetched[a.symbol] ?? a.avg_cost ?? 0
-        return Number(p) * Number(a.quantity || 0)
-      }
-      
-      const getCostValue = (a: any) => {
-        if (a.type === 'bes') {
-          return Number(a.principal ?? a.avg_cost ?? 0)
-        }
-      
-        if (a.type === 'vadeli') {
-          return Number(a.principal ?? 0)
-        }
-
-        const isUsdType = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
-        if (isUsdType) {
-          if (a.total_try_cost) return Number(a.total_try_cost)
-          return Number(a.avg_cost || 0) * Number(a.quantity || 0) * usdtry
-        }
-      
-        return Number(a.avg_cost || 0) * Number(a.quantity || 0)
-      }
-      
-      const isPerformanceAsset = (a: any) => {
-        // BES (Bireysel Emeklilik), hantal yapısı gereği aktif performans (QQQM benchmark) yarışına DAHİL EDİLMEZ.
-        if (a.type === 'bes') return false;
-      
-        // Nakit, döviz, vadeli mevduat, fon, kripto ve hisseler aktif yatırım tercihleridir. 
-        // Nakitte beklemek piyasa fırsat maliyetini (veya krizden korunmayı) yansıttığı için performansta KALIR.
-        return true;
-      }
-      
-      const tv = loaded.reduce((sum: number, a: any) => {
-        return sum + getCurrentValue(a)
-      }, 0)
-      
-      const tc = loaded.reduce((sum: number, a: any) => {
-        // HATA DÜZELTİLDİ: Tüm servet maliyetine (Portföy Büyümesi grafiği için) BES ve Vadeli dahil her şey eklenir.
-        return sum + getCostValue(a)
-      }, 0)
-      
-      const performanceValue = loaded.reduce((sum: number, a: any) => {
+      const performanceValue = loaded.reduce((sum, a) => {
         if (!isPerformanceAsset(a)) return sum
-        return sum + getCurrentValue(a)
+        return sum + getCurrentValue(a, fetched)
       }, 0)
       
-      const performanceCost = loaded.reduce((sum: number, a: any) => {
+      const performanceCost = loaded.reduce((sum, a) => {
         if (!isPerformanceAsset(a)) return sum
-        return sum + getCostValue(a)
+        return sum + getCostValue(a, usdtry)
       }, 0)
       
       await saveSnapshot(portfolios[0].id, tv, tc, performanceValue, performanceCost)

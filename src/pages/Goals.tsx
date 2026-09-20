@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { FALLBACK_USD_RATE } from '../lib/constants'
+import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
@@ -101,39 +103,12 @@ const Goals = () => {
     setLoading(false)
   }
 
-  const usdRate = prices['USDTRY=X'] || 46.4
+  const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
   const goalTRY = GOAL_USD * usdRate
 
-  const isUSD = (type: string) => ['usd_hisse', 'kripto', 'etf', 'doviz'].includes(type)
 
-  const getAssetValue = (asset: any) => {
-    if (asset.type === 'vadeli' && asset.principal && asset.interest_rate) {
-      const start = new Date(asset.start_date || asset.created_at)
-      const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-      const dailyRate = asset.interest_rate / 365 / 100
-      return Number(asset.principal) * (1 + dailyRate * days)
-    }
-    if (['bes', 'vadeli'].includes(asset.type)) {
-      const vals = asset.manual_values || []
-      return Number(vals[vals.length - 1]?.value || 0)
-    }
-    
-    // Döviz ve Nakit değerlemesi
-    if (asset.type === 'doviz') {
-      return Number(asset.quantity || 0) * usdRate;
-    }
-    if (asset.type === 'nakit') {
-      return Number(asset.quantity || 0) * (Number(asset.avg_cost) || 1);
-    }
-    
-    const isUsdAsset = isUSD(asset.type);
-    const fallbackPrice = isUsdAsset ? (Number(asset.avg_cost || 0) * usdRate) : Number(asset.avg_cost || 0);
-    const price = prices[asset.symbol] ?? fallbackPrice ?? 0;
-    
-    return price * Number(asset.quantity)
-  }
 
-  const portfolioTotal = assets.reduce((sum, a) => sum + getAssetValue(a), 0)
+  const portfolioTotal = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRate), 0)
   const manualTotal = manualAssets.reduce((sum, a) => sum + Number(a.value_try), 0)
   const grandTotal = portfolioTotal + manualTotal
   const progressPct = Math.min((grandTotal / goalTRY) * 100, 100)
@@ -146,7 +121,7 @@ const Goals = () => {
   const milestoneProgressPct = milestoneRange > 0 ? Math.min((currentProgressInMilestone / milestoneRange) * 100, 100) : 100;
 
   // --- YENİ BÜTÜNLEŞİK FIRE PROJEKSİYONU (Portfolio-Level Return) ---
-  const fireData = (() => {
+  const fireData = useMemo(() => {
     if (assets.length === 0) return null
 
     const getHoldingDays = (dateStr?: string) => {
@@ -160,7 +135,7 @@ const Goals = () => {
     const activeAssets = assets.filter(a => a.type !== 'bes' && Number(a.quantity || 0) > 0)
 
     // 1. BES Getirisi (Geçmiş Kur Maliyetli - İzole)
-    const besValue = besAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
+    const besValue = besAssets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRate), 0)
     const besCost = besAssets.reduce((sum, a) => sum + Number(a.principal || a.avg_cost || 0), 0)
     let besMonthlyUsdReturn = 0
     const rateBesAnchor = historicalRates['2023-09-01'] || usdRate
@@ -182,7 +157,7 @@ const Goals = () => {
       const isUsdAsset = isUSD(a.type);
       
       // Toplam Güncel Değer (Dolar Cinsinden)
-      const valTRY = getAssetValue(a);
+      const valTRY = getCurrentValue(a, prices, usdRate);
       activeValueUSD += valTRY / usdRate;
       
       // Toplam Maliyet (Dolar Cinsinden)
@@ -192,12 +167,8 @@ const Goals = () => {
       if (isUsdAsset) {
         // Döviz, Kripto, ABD Hisse -> Maliyet zaten USD bazlı tutulur (örn: 0.45)
         activeCostUSD += Number(a.avg_cost || 0) * Number(a.quantity || 0);
-      } else if (a.type === 'vadeli') {
-        // Vadeli -> Ana para TRY'dir, o günkü kura bölünür
-        activeCostUSD += Number(a.principal || 0) / rateAtBuy;
       } else {
-        // BIST, Altın, TRY Nakit -> Maliyet TRY'dir, o günkü kura bölünür
-        const tryCost = Number(a.avg_cost || 1) * Number(a.quantity || 0);
+        const tryCost = getCostValue(a, rateAtBuy);
         activeCostUSD += tryCost / rateAtBuy;
       }
     });
@@ -307,7 +278,7 @@ const Goals = () => {
       besAnnPct: (Math.pow(1 + besMonthlyUsdReturn, 12) - 1) * 100,
       activeAnnPct: (Math.pow(1 + activeMonthlyUsdReturn, 12) - 1) * 100
     }
-  })()
+  }, [assets, manualTotal, savings, historicalRates, usdRate, monthlyExpenseUSD, targetYearsInput, nextMilestoneUSD, prices])
 
   const handleAddManualAsset = async () => {
     if (!assetForm.name || !assetForm.value_try) return
@@ -956,22 +927,7 @@ const Goals = () => {
         </>
       )}
 
-      {/* Alt Navigasyon Sıralaması */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
-        {[
-          { path: '/', icon: '📊', label: 'Portföy' },
-          { path: '/performans', icon: '📈', label: 'Performans' },
-          { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
-        ].map(item => (
-          <button key={item.path} onClick={() => navigate(item.path)}
-            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>
-            <span style={{ fontSize: '18px' }}>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </div>
+
     </div>
   )
 }

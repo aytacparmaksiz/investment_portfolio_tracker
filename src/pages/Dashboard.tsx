@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
+import { FALLBACK_USD_RATE } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
 
 const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed', '#0891b2']
 
@@ -26,8 +29,8 @@ const Dashboard = () => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [dailyChange, setDailyChange] = useState<number | null>(null)
   const [dailyChangePct, setDailyChangePct] = useState(0)
-  const [pullDistance, setPullDistance] = useState(0)
-  const [refreshing, setRefreshing] = useState(false)
+  
+  const { pullDistance, refreshing } = usePullToRefresh(refresh)
 
   useEffect(() => { refresh() }, [])
 
@@ -37,7 +40,7 @@ const Dashboard = () => {
   
       const { data, error } = await supabase
         .from('portfolio_snapshots')
-        .select('snapshot_date,total_value,created_at')
+        .select('snapshot_date,total_value,total_cost,created_at')
         .eq('portfolio_id', portfolioId)
         .order('snapshot_date', { ascending: false })
         .order('created_at', { ascending: false })
@@ -52,8 +55,8 @@ const Dashboard = () => {
       if (!latest || !previous) return
   
       const change =
-        Number(latest.total_value) -
-        Number(previous.total_value)
+        (Number(latest.total_value) - Number(previous.total_value)) -
+        (Number(latest.total_cost || 0) - Number(previous.total_cost || 0))
   
       setDailyChange(change)
   
@@ -67,39 +70,7 @@ const Dashboard = () => {
     calcDaily()
   }, [portfolioId, refreshing])
 
-  useEffect(() => {
-    let startY = 0
-    let pulling = false
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true }
-    }
-    const onTouchMove = (e: TouchEvent) => {
-      if (!pulling) return
-      const diff = e.touches[0].clientY - startY
-      if (diff > 0) setPullDistance(Math.min(diff, 100))
-    }
-    const onTouchEnd = async () => {
-      if (pulling && pullDistance > 60) {
-        setRefreshing(true)
-        await refresh(true)
-        setRefreshing(false)
-      }
-      setPullDistance(0)
-      pulling = false
-    }
-
-    window.addEventListener('touchstart', onTouchStart)
-    window.addEventListener('touchmove', onTouchMove)
-    window.addEventListener('touchend', onTouchEnd)
-    return () => {
-      window.removeEventListener('touchstart', onTouchStart)
-      window.removeEventListener('touchmove', onTouchMove)
-      window.removeEventListener('touchend', onTouchEnd)
-    }
-  }, [pullDistance])
-
-  const usdRate = prices['USDTRY=X'] || 46.4
+  const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
 
   const handleInvite = async () => {
     if (!inviteEmail || !portfolioId) return
@@ -114,44 +85,6 @@ const Dashboard = () => {
     else setInviteStatus('success')
   }
 
-  const getAssetValue = (asset: any) => {
-    const isActiveAsset = (asset: any) => {
-      const quantity = Number(asset.quantity || 0)
-    
-      if (asset.type === 'nakit') {
-        return quantity > 0
-      }
-    
-      if (['bes', 'vadeli'].includes(asset.type)) {
-        return getAssetValue(asset) > 0
-      }
-    
-      return quantity > 0
-    }
-    if (asset.type === 'nakit') return Number(asset.quantity)
-    if (asset.type === 'vadeli' && asset.principal && asset.interest_rate) {
-      const start = new Date(asset.start_date || asset.created_at)
-      const days = Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-      const dailyRate = asset.interest_rate / 365 / 100
-      return Number(asset.principal) * (1 + dailyRate * days)
-    }
-    if (['bes', 'vadeli'].includes(asset.type)) {
-      const vals = asset.manual_values || []
-      return Number(vals[vals.length - 1]?.value || 0)
-    }
-    const price = prices[asset.symbol] ?? asset.avg_cost ?? 0
-    return price * Number(asset.quantity)
-  }
-
-  const getCostValue = (asset: any) => {
-    if (asset.type === 'nakit') return Number(asset.quantity)
-    if (asset.type === 'vadeli' && asset.principal) return Number(asset.principal)
-    if (asset.type === 'bes') return Number(asset.principal ?? asset.avg_cost ?? 0)
-    const isUSD = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
-    if (isUSD && asset.total_try_cost) return Number(asset.total_try_cost)
-    const cost = (asset.avg_cost || 0) * Number(asset.quantity)
-    return isUSD ? cost * usdRate : cost
-  }
   
   const groupByType = () => {
     const groups: Record<string, any> = {}
@@ -165,13 +98,13 @@ const Dashboard = () => {
         name: ASSET_LABELS[type] || type,
         value: 0, cost: 0, costUSD: 0, items: []
       }
-      groups[type].value += getAssetValue(asset)
+      groups[type].value += getCurrentValue(asset, prices, usdRate)
       
-      const costTRY = getCostValue(asset)
+      const costTRY = getCostValue(asset, usdRate)
       groups[type].cost += costTRY
 
       // HATA DÜZELTİLDİ: 'doviz' listeden çıkarıldı. Döviz varlıklarının alış maliyeti TL bazlıdır.
-      const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
+      const isUSDAsset = isUSD(asset.type)
       groups[type].costUSD += isUSDAsset ? (Number(asset.avg_cost || 0) * Number(asset.quantity)) : (costTRY / usdRate)
 
       groups[type].items.push(asset)
@@ -182,12 +115,12 @@ const Dashboard = () => {
   const pieData = groupByType()
   const activeAssets = assets.filter((a: any) => ['bes', 'vadeli', 'nakit'].includes(a.type) || Number(a.quantity) > 0)
   
-  const total = activeAssets.reduce((sum, a) => sum + getAssetValue(a), 0)
-  const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a), 0)
+  const total = activeAssets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRate), 0)
+  const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRate), 0)
   
   const totalCostUSD = activeAssets.reduce((sum, a) => {
-    const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(a.type)
-    return sum + (isUSDAsset ? (Number(a.avg_cost || 0) * Number(a.quantity)) : (getCostValue(a) / usdRate))
+    const isUSDAsset = isUSD(a.type)
+    return sum + (isUSDAsset ? (Number(a.avg_cost || 0) * Number(a.quantity)) : (getCostValue(a, usdRate) / usdRate))
   }, 0)
 
   const isDispUSD = displayCurrency === 'USD'
@@ -388,7 +321,7 @@ const Dashboard = () => {
               group.items.forEach((a: any) => {
                 const st = a.strategy || 'Belirtilmemiş'
                 if (!strategies[st]) strategies[st] = { value: 0, items: [] }
-                strategies[st].value += getAssetValue(a)
+                strategies[st].value += getCurrentValue(a, prices, usdRate)
                 strategies[st].items.push(a)
               })
               
@@ -434,7 +367,7 @@ const Dashboard = () => {
                   ) : (
                     <div>
                       {strategies[selectedStrategy]?.items
-                        .map((asset: any) => ({ asset, value: getAssetValue(asset) }))
+                        .map((asset: any) => ({ asset, value: getCurrentValue(asset, prices, usdRate) }))
                         .sort((a: any, b: any) => b.value - a.value)
                         .map(({ asset, value }) => {
                           const weight = strategies[selectedStrategy].value > 0 ? ((value / strategies[selectedStrategy].value) * 100).toFixed(1) : 0;
@@ -458,7 +391,7 @@ const Dashboard = () => {
               <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                 <p style={{ fontWeight: '700', fontSize: '13px', marginBottom: '10px', color: 'var(--text-primary)' }}>{group.label} — Dağılım</p>
                 {group.items
-                  .map((asset: any) => ({ asset, value: getAssetValue(asset) }))
+                  .map((asset: any) => ({ asset, value: getCurrentValue(asset, prices, usdRate) }))
                   .sort((a: any, b: any) => b.value - a.value)
                   .map(({ asset, value }) => {
                     const weight = group.value > 0 ? ((value / group.value) * 100).toFixed(1) : 0;
@@ -530,9 +463,9 @@ const Dashboard = () => {
                 </div>
 
                 {expandedGroups.has(group.type) && group.items.map((asset: any, ai: number) => {
-                  const value = getAssetValue(asset)
+                  const value = getCurrentValue(asset, prices, usdRate)
                   const isManual = ['bes', 'vadeli'].includes(asset.type)
-                  const isUSDAsset = ['usd_hisse', 'kripto', 'etf'].includes(asset.type)
+                  const isUSDAsset = isUSD(asset.type)
                   const hasPrice = prices[asset.symbol] !== undefined
 
                   return (
@@ -603,22 +536,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Alt Navigasyon */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', padding: '10px 0 16px' }}>
-        {[
-          { path: '/', icon: '📊', label: 'Portföy' },
-          { path: '/performans', icon: '📈', label: 'Performans' },
-          { path: '/analitik-varliklar', icon: '📋', label: 'Varlıklar' },
-          { path: '/hedefler', icon: '🎯', label: 'Hedefler' },
-          { path: '/varliklar', icon: '➕', label: 'İşlem' },
-        ].map(item => (
-          <button key={item.path} onClick={() => navigate(item.path)}
-            style={{ background: 'none', color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '600', padding: '4px 8px' }}>
-            <span style={{ fontSize: '18px' }}>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </div>
+
     </div>
   )
 }
