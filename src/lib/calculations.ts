@@ -5,7 +5,9 @@ export const isUSD = (type: string): boolean => {
   return ['usd_hisse', 'kripto', 'etf'].includes(type);
 };
 
-export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number>, usdtry: number = FALLBACK_USD_RATE): number => {
+export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> = {}, usdtry: number = FALLBACK_USD_RATE): number => {
+  if (!a) return 0;
+
   if (['bes', 'vadeli'].includes(a.type)) {
     if (a.type === 'vadeli' && a.principal && a.interest_rate) {
       const start = new Date(a.start_date || a.created_at);
@@ -26,7 +28,7 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number>,
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  const price = fetchedPrices[a.symbol];
+  const price = (fetchedPrices && a.symbol) ? fetchedPrices[a.symbol] : undefined;
   if (price !== undefined) {
     return Number(price) * Number(a.quantity || 0);
   }
@@ -40,6 +42,8 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number>,
 };
 
 export const getCostValue = (a: Asset, usdtry: number = FALLBACK_USD_RATE): number => {
+  if (!a) return 0;
+
   if (a.type === 'bes') {
     return Number(a.principal ?? a.avg_cost ?? 0);
   }

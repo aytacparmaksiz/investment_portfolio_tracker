@@ -21,15 +21,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        setUser(data?.session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Auth getSession error:', err);
+        setLoading(false);
+      });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -50,11 +56,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setUser(null);
   };
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

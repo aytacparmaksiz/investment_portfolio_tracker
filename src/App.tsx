@@ -1,20 +1,25 @@
+import { ReactNode } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PortfolioProvider } from './context/PortfolioContext'
+import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Analytics from './pages/Analytics'
 import Goals from './pages/Goals'
 
-import { ReactNode } from 'react'
-
 const PrivateRoute = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth()
-  return user ? children : <Navigate to="/login" />
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
+        Yükleniyor...
+      </div>
+    )
+  }
+  return user ? <>{children}</> : <Navigate to="/login" />
 }
-
-import BottomNav from './components/BottomNav'
 
 const AppRoutes = () => {
   const { user } = useAuth()
