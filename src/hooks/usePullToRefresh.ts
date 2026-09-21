@@ -1,34 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export const usePullToRefresh = (onRefresh: (force?: boolean) => Promise<void>) => {
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    let startY = 0;
-    let pulling = false;
+  const startYRef = useRef(0);
+  const pullingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+  const onRefreshRef = useRef(onRefresh);
 
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
     const onTouchStart = (e: TouchEvent) => {
       if (window.scrollY === 0) {
-        startY = e.touches[0].clientY;
-        pulling = true;
+        startYRef.current = e.touches[0].clientY;
+        pullingRef.current = true;
       }
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!pulling) return;
-      const diff = e.touches[0].clientY - startY;
-      if (diff > 0) setPullDistance(Math.min(diff, 100));
+      if (!pullingRef.current) return;
+      const diff = e.touches[0].clientY - startYRef.current;
+      if (diff > 0) {
+        const dist = Math.min(diff, 100);
+        pullDistanceRef.current = dist;
+        setPullDistance(dist);
+      }
     };
 
     const onTouchEnd = async () => {
-      if (pulling && pullDistance > 60) {
+      if (pullingRef.current && pullDistanceRef.current > 60) {
         setRefreshing(true);
-        await onRefresh(true);
+        await onRefreshRef.current(true);
         setRefreshing(false);
       }
+      pullDistanceRef.current = 0;
       setPullDistance(0);
-      pulling = false;
+      pullingRef.current = false;
     };
 
     window.addEventListener('touchstart', onTouchStart);
@@ -40,7 +51,8 @@ export const usePullToRefresh = (onRefresh: (force?: boolean) => Promise<void>) 
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [pullDistance, onRefresh]);
+  }, []);
 
   return { pullDistance, refreshing };
 };
+

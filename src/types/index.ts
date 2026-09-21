@@ -1,6 +1,7 @@
 export interface Asset {
   id: string;
   portfolio_id: string;
+  name?: string;
   symbol: string;
   type: string;
   quantity?: number;
@@ -9,6 +10,11 @@ export interface Asset {
   principal?: number;
   interest_rate?: number;
   start_date?: string;
+  maturity_date?: string;
+  maturity_days?: number;
+  sector?: string;
+  strategy?: string;
+  coingecko_id?: string;
   created_at: string;
   manual_values?: { value: number; recorded_at: string }[];
 }

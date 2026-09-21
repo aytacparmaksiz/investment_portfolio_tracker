@@ -59,9 +59,10 @@ export async function fetchPrice(symbol: string): Promise<number | null> {
   return details ? details.price : null
 }
 
-export async function fetchCryptoPrice(symbol: string): Promise<{ try: number; usd: number; dailyPct?: number } | null> {
+export async function fetchCryptoPrice(symbol: string, coingeckoId?: string): Promise<{ try: number; usd: number; dailyPct?: number } | null> {
   try {
-    const id = CRYPTO_IDS[symbol.trim().toUpperCase()]
+    const cleanCoingeckoId = coingeckoId?.trim().toLowerCase()
+    const id = cleanCoingeckoId || CRYPTO_IDS[symbol.trim().toUpperCase()]
     if (!id) return null
     const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`)
     const data = await res.json()
@@ -204,7 +205,7 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
       }
 
     } else if (asset.type === 'kripto') {
-      const cryptoPrice = await fetchCryptoPrice(sym)
+      const cryptoPrice = await fetchCryptoPrice(sym, asset.coingecko_id)
       if (cryptoPrice) {
         setPrice(sym, cryptoPrice.try, cryptoPrice.dailyPct)
         prices[sym + '_usd'] = cryptoPrice.usd
@@ -231,18 +232,27 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
 
         if (sym === 'TRYG') {
           setPrice(sym, gramGoldPrice, daily)
+          prices[sym + '_usd'] = gramGoldPrice / usdtry
         } else if (sym === 'CEYREK') {
           setPrice(sym, gramGoldPrice * 1.6065, daily)
+          prices[sym + '_usd'] = (gramGoldPrice * 1.6065) / usdtry
         } else if (sym === 'YARIM') {
           setPrice(sym, gramGoldPrice * 3.2130, daily)
+          prices[sym + '_usd'] = (gramGoldPrice * 3.2130) / usdtry
         } else if (sym === 'TAM') {
           setPrice(sym, gramGoldPrice * 6.4260, daily)
+          prices[sym + '_usd'] = (gramGoldPrice * 6.4260) / usdtry
         } else if (sym === 'CUMHURIYET' || sym === 'ATA') {
           setPrice(sym, gramGoldPrice * 7.2160, daily)
+          prices[sym + '_usd'] = (gramGoldPrice * 7.2160) / usdtry
         } else if (sym === 'XAU') {
-          setPrice(sym, xauPrice, daily)
+          setPrice(sym, xauPrice * usdtry, daily)
+          prices[sym + '_usd'] = xauPrice
+          prices[rawSym + '_usd'] = xauPrice
+          prices[sym.toLowerCase() + '_usd'] = xauPrice
         } else {
           setPrice(sym, xauPrice * usdtry, daily)
+          prices[sym + '_usd'] = xauPrice
         }
       }
 

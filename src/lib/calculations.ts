@@ -11,12 +11,21 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
   if (['bes', 'vadeli'].includes(a.type)) {
     if (a.type === 'vadeli' && a.principal && a.interest_rate) {
       const start = new Date(a.start_date || a.created_at);
-      const days = Math.max(
+      let elapsedDays = Math.max(
         0,
-        Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24))
       );
+      if (a.maturity_date) {
+        const matDays = Math.max(
+          0,
+          Math.floor((new Date(a.maturity_date).getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        );
+        elapsedDays = Math.min(elapsedDays, matDays);
+      } else if (a.maturity_days) {
+        elapsedDays = Math.min(elapsedDays, Number(a.maturity_days));
+      }
       const dailyRate = Number(a.interest_rate) / 365 / 100;
-      return Number(a.principal) * (1 + dailyRate * days);
+      return Number(a.principal) * (1 + dailyRate * elapsedDays);
     }
 
     const vals = a.manual_values || [];

@@ -10,34 +10,20 @@ export async function saveSnapshot(
   const today = new Date().toISOString().split('T')[0]
 
   const snapshotPayload = {
+    portfolio_id: portfolioId,
+    snapshot_date: today,
     total_value: totalValue,
     total_cost: totalCost,
     performance_value: performanceValue,
     performance_cost: performanceCost
   }
 
-  // Bugün zaten snapshot var mı?
-  const { data: existing } = await supabase
+  const { error } = await supabase
     .from('portfolio_snapshots')
-    .select('id')
-    .eq('portfolio_id', portfolioId)
-    .eq('snapshot_date', today)
-    .maybeSingle()
+    .upsert(snapshotPayload, { onConflict: 'portfolio_id,snapshot_date' })
 
-  if (existing) {
-    // Varsa güncelle
-    await supabase
-      .from('portfolio_snapshots')
-      .update(snapshotPayload)
-      .eq('id', existing.id)
-  } else {
-    // Yoksa yeni ekle
-    await supabase
-      .from('portfolio_snapshots')
-      .insert({
-        portfolio_id: portfolioId,
-        ...snapshotPayload
-      })
+  if (error) {
+    console.error('Snapshot upsert error:', error)
   }
 }
 

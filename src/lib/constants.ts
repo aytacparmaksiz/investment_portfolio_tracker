@@ -17,3 +17,16 @@ export const ASSET_LABELS: Record<string, string> = {
 };
 
 export const FALLBACK_USD_RATE = 46.4;
+
+export const SECTOR_OPTIONS = [
+  'Teknoloji',
+  'Finans',
+  'Sağlık',
+  'Sanayi',
+  'Enerji',
+  'Tüketim',
+  'Telekomünikasyon',
+  'Gayrimenkul',
+  'Hammadde',
+  'Diğer'
+];

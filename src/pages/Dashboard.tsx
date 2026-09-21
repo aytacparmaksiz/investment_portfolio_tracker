@@ -103,9 +103,15 @@ const Dashboard = () => {
       const costTRY = getCostValue(asset, usdRate)
       groups[type].cost += costTRY
 
-      // HATA DÜZELTİLDİ: 'doviz' listeden çıkarıldı. Döviz varlıklarının alış maliyeti TL bazlıdır.
       const isUSDAsset = isUSD(asset.type)
-      groups[type].costUSD += isUSDAsset ? (Number(asset.avg_cost || 0) * Number(asset.quantity)) : (costTRY / usdRate)
+      const isUsdDoviz = asset.type === 'doviz' && (asset.symbol?.toUpperCase() === 'USD' || !asset.symbol)
+      const assetCostUSD = isUSDAsset
+        ? (Number(asset.avg_cost || 0) * Number(asset.quantity || 0))
+        : isUsdDoviz
+        ? Number(asset.quantity || 0)
+        : (costTRY / usdRate)
+
+      groups[type].costUSD += assetCostUSD
 
       groups[type].items.push(asset)
     })
@@ -120,7 +126,14 @@ const Dashboard = () => {
   
   const totalCostUSD = activeAssets.reduce((sum, a) => {
     const isUSDAsset = isUSD(a.type)
-    return sum + (isUSDAsset ? (Number(a.avg_cost || 0) * Number(a.quantity)) : (getCostValue(a, usdRate) / usdRate))
+    const isUsdDoviz = a.type === 'doviz' && (a.symbol?.toUpperCase() === 'USD' || !a.symbol)
+    if (isUSDAsset) {
+      return sum + (Number(a.avg_cost || 0) * Number(a.quantity || 0))
+    }
+    if (isUsdDoviz) {
+      return sum + Number(a.quantity || 0)
+    }
+    return sum + (getCostValue(a, usdRate) / usdRate)
   }, 0)
 
   const isDispUSD = displayCurrency === 'USD'

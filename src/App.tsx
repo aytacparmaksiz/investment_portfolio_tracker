@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Assets from './pages/Assets'
 import Analytics from './pages/Analytics'
 import Goals from './pages/Goals'
+import ErrorBoundary from './components/ErrorBoundary'
 
 const PrivateRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth()
@@ -40,11 +41,13 @@ const AppRoutes = () => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <PortfolioProvider>
-        <AppRoutes />
-      </PortfolioProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <PortfolioProvider>
+          <AppRoutes />
+        </PortfolioProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -24,6 +24,8 @@ const Analytics = () => {
   const [compLoading, setCompLoading] = useState(false)
   const [totalCost, setTotalCost] = useState<number>(0)
   const [firstTxDate, setFirstTxDate] = useState<string>('')
+  const [compDate, setCompDate] = useState<string | null>(null)
+  const [compCost, setCompCost] = useState<string | null>(null)
   const [expandedAssetGroups, setExpandedAssetGroups] = useState<Set<string>>(new Set())
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set())
 
@@ -223,7 +225,7 @@ const Analytics = () => {
                     <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
                   </div>
 
-                  {isExpanded && type === 'usd_hisse' ? (() => {
+                  {isExpanded && (type === 'usd_hisse' || type === 'hisse') ? (() => {
                     const sectors: Record<string, any[]> = {}
                     items.forEach((a: any) => {
                       const sec = a.sector || 'Diğer'
@@ -231,7 +233,8 @@ const Analytics = () => {
                       sectors[sec].push(a)
                     })
                     return Object.entries(sectors).map(([sectorName, secItems]) => {
-                      const isSecExpanded = expandedSectors.has(sectorName)
+                      const sectorKey = `${type}_${sectorName}`
+                      const isSecExpanded = expandedSectors.has(sectorKey)
                       
                       let sectorCost = 0;
                       let sectorValue = 0;
@@ -243,11 +246,11 @@ const Analytics = () => {
                       const sectorGainPct = sectorCost > 0 ? (sectorGain / sectorCost) * 100 : 0;
   
                       return (
-                        <div key={sectorName} style={{ paddingLeft: '8px', marginTop: '8px', marginBottom: '8px' }}>
+                        <div key={sectorKey} style={{ paddingLeft: '8px', marginTop: '8px', marginBottom: '8px' }}>
                           <div onClick={() => {
                             const next = new Set(expandedSectors)
-                            if (next.has(sectorName)) next.delete(sectorName)
-                            else next.add(sectorName)
+                            if (next.has(sectorKey)) next.delete(sectorKey)
+                            else next.add(sectorKey)
                             setExpandedSectors(next)
                           }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '6px 0', borderBottom: isSecExpanded ? 'none' : '1px solid var(--border-light)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -260,15 +263,21 @@ const Analytics = () => {
                           </div>
                           
                           {isSecExpanded && secItems.map((asset: any, index: number) => {
-                            const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * usdRate : 0)
+                            const isU = isUSD(asset.type)
+                            const livePrice = prices[asset.symbol] ?? (asset.avg_cost ? asset.avg_cost * (isU ? usdRate : 1) : 0)
                             const currentValue = getCurrentValue(asset, prices, usdRate)
                             const costValueTRY = getCostValue(asset, usdRate)
                             const gain = currentValue - costValueTRY
                             const gainPct = costValueTRY > 0 ? (gain / costValueTRY) * 100 : 0
                             const dailyPct = prices[asset.symbol + '_dailypct']
                             
-                            const unitCostDisplay = isHidden ? '••••••' : `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                            const unitPriceDisplay = isHidden ? '••••••' : `$${(prices[asset.symbol + '_usd'] ?? (livePrice / usdRate)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                            const unitCostDisplay = isHidden ? '••••••' : (isU
+                              ? `$${Number(asset.avg_cost || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              : `₺${(costValueTRY / Number(asset.quantity || 1)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
+                            
+                            const unitPriceDisplay = isHidden ? '••••••' : (isU
+                              ? `$${(prices[asset.symbol + '_usd'] ?? (livePrice / usdRate)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
 
                             return (
                               <div key={asset.id} style={{ marginBottom: index < secItems.length - 1 ? '16px' : 0, paddingBottom: index < secItems.length - 1 ? '16px' : 0, borderBottom: index < secItems.length - 1 ? '1px solid var(--border)' : 'none', paddingLeft: '14px', paddingTop: '10px' }}>
@@ -277,7 +286,11 @@ const Analytics = () => {
                                     <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
                                     <div>
                                       <p style={{ fontWeight: '700', fontSize: '14px', color: '#1e1b4b' }}>{asset.name}</p>
-                                      <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>{asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet · <span style={{ color: 'var(--accent)' }}>{asset.strategy || 'Core'}</span></p>
+                                      <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>
+                                        {asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet{asset.type === 'usd_hisse' && asset.strategy ? (
+                                          <> · <span style={{ color: 'var(--accent)' }}>{asset.strategy}</span></>
+                                        ) : ''}
+                                      </p>
                                     </div>
                                   </div>
                                   <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -550,19 +563,17 @@ const Analytics = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
-                        <input type="date" defaultValue={firstTxDate || earliestActiveDate || "2025-01-01"} id="compFromDate"
+                        <input type="date" value={compDate !== null ? compDate : (firstTxDate || earliestActiveDate || "2025-01-01")} onChange={e => setCompDate(e.target.value)}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" defaultValue={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} placeholder={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} id="compTotalCost"
+                        <input type="number" value={compCost !== null ? compCost : Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <button onClick={async () => {
-                        const dateEl = document.getElementById('compFromDate') as HTMLInputElement
-                        const costEl = document.getElementById('compTotalCost') as HTMLInputElement
-                        const fromDate = dateEl?.value || firstTxDate || earliestActiveDate || '2025-01-01'
-                        const cost = Number(costEl?.value) || (totalCost > 0 ? totalCost : currentActiveCost)
+                        const fromDate = (compDate !== null ? compDate : (firstTxDate || earliestActiveDate || '2025-01-01')) || '2025-01-01'
+                        const cost = Number(compCost !== null ? compCost : (totalCost > 0 ? totalCost : currentActiveCost)) || (totalCost > 0 ? totalCost : currentActiveCost)
                         setCompLoading(true)
                         const result = await calculateComparison(cost, fromDate)
                         setComparison(result)

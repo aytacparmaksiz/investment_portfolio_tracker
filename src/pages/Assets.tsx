@@ -3,15 +3,15 @@ import { isUSD } from '../lib/calculations'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { addTransaction, fetchTransactions, deleteTransaction } from '../lib/transactions'
+import { addTransaction, fetchTransactions, deleteTransaction, syncInitialTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ASSET_TYPES, ASSET_LABELS } from '../lib/constants'
+import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS } from '../lib/constants'
 import { useAssetSearch } from '../hooks/useAssetSearch'
 
 const Assets = () => {
   const { user } = useAuth()
-  const { refresh, prices, isHidden } = usePortfolio()
+  const { refresh, prices, isHidden, portfolioId: contextPortfolioId } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [assets, setAssets] = useState<any[]>([])
@@ -58,14 +58,31 @@ const Assets = () => {
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
-    const { data: portfolios } = await supabase
-      .from('portfolios').select('id').eq('user_id', user?.id)
-    if (portfolios?.length) {
-      setPortfolioId(portfolios[0].id)
+    if (!user) { setLoading(false); return }
+    let pid = portfolioId || contextPortfolioId
+    if (!pid) {
+      const { data: portfolios } = await supabase
+        .from('portfolios').select('id').eq('user_id', user.id)
+      if (portfolios?.length) {
+        pid = portfolios[0].id
+        setPortfolioId(pid)
+      } else {
+        const { data: newP } = await supabase
+          .from('portfolios')
+          .insert({ user_id: user.id, name: 'Ana Portföy' })
+          .select('id')
+          .single()
+        if (newP?.id) {
+          pid = newP.id
+          setPortfolioId(pid)
+        }
+      }
+    }
+    if (pid) {
       const { data } = await supabase
         .from('assets')
         .select('*, manual_values(value, recorded_at)')
-        .eq('portfolio_id', portfolios[0].id)
+        .eq('portfolio_id', pid)
         .order('created_at', { ascending: false })
       setAssets(data || [])
     }
@@ -94,19 +111,36 @@ const Assets = () => {
     if (form.type === 'bes' && !form.avg_cost) return setError('BES için yatırılan tutar zorunludur.')
     if (isManual && !form.manual_value) return setError(form.type === 'bes' ? 'BES güncel değeri zorunludur.' : 'Değer zorunludur.')
     
+    let targetPid = portfolioId || contextPortfolioId
+    if (!targetPid && user?.id) {
+      const { data: newP } = await supabase
+        .from('portfolios')
+        .insert({ user_id: user.id, name: 'Ana Portföy' })
+        .select('id')
+        .single()
+      if (newP?.id) {
+        targetPid = newP.id
+        setPortfolioId(newP.id)
+      }
+    }
+    if (!targetPid) {
+      setError('Portföy oluşturulamadı veya bulunamadı. Lütfen sayfayı yenileyin.')
+      return
+    }
+
     setSaving(true)
     const { data: asset, error: assetError } = await supabase
       .from('assets')
       .insert({
-        portfolio_id: portfolioId,
+        portfolio_id: targetPid,
         type: form.type,
         name: form.name,
-        symbol: form.symbol?.toUpperCase() || null,
+        symbol: form.symbol ? form.symbol.trim().toUpperCase() : null,
         quantity: isManual ? 1 : Number(form.quantity),
         avg_cost: form.avg_cost ? Number(form.avg_cost) : null,
-        coingecko_id: form.coingecko_id || null,
+        coingecko_id: form.coingecko_id ? form.coingecko_id.trim().toLowerCase() : null,
         strategy: form.type === 'usd_hisse' ? form.strategy : null,
-        sector: form.type === 'usd_hisse' ? form.sector : null
+        sector: (form.type === 'usd_hisse' || form.type === 'hisse') ? (form.sector || 'Diğer') : null
       })
       .select().single()
 
@@ -123,7 +157,14 @@ const Assets = () => {
       if (isVadeli && form.interest_rate && form.maturity_days) {
         const maturityDate = new Date(form.start_date)
         maturityDate.setDate(maturityDate.getDate() + Number(form.maturity_days))
-        await supabase.from('assets').update({ principal: Number(form.manual_value), interest_rate: Number(form.interest_rate), maturity_date: maturityDate.toISOString().split('T')[0], start_date: form.start_date, symbol: null }).eq('id', asset.id)
+        await supabase.from('assets').update({
+          principal: Number(form.manual_value),
+          interest_rate: Number(form.interest_rate),
+          maturity_days: Number(form.maturity_days),
+          maturity_date: maturityDate.toISOString().split('T')[0],
+          start_date: form.start_date,
+          symbol: null
+        }).eq('id', asset.id)
       }
     } else if (form.quantity && form.avg_cost) {
       const isUsdType = isUSD(form.type)
@@ -175,17 +216,27 @@ const Assets = () => {
        return
     }
     setEditSaving(true)
+    const newQty = Number(editForm.quantity)
+    const newCost = Number(editForm.avg_cost)
+    const isUsdType = isUSD(editAsset.type)
+
     const payload = {
       name: editForm.name,
-      symbol: editForm.symbol.toUpperCase(),
-      quantity: Number(editForm.quantity),
-      avg_cost: Number(editForm.avg_cost),
+      symbol: editForm.symbol ? editForm.symbol.trim().toUpperCase() : null,
+      quantity: newQty,
+      avg_cost: newCost,
       strategy: editAsset.type === 'usd_hisse' ? editForm.strategy : null,
-      sector: editAsset.type === 'usd_hisse' ? editForm.sector : null,
-      coingecko_id: editForm.coingecko_id || null
+      sector: (editAsset.type === 'usd_hisse' || editAsset.type === 'hisse') ? (editForm.sector || 'Diğer') : null,
+      coingecko_id: editForm.coingecko_id ? editForm.coingecko_id.trim().toLowerCase() : null
     }
     const { error } = await supabase.from('assets').update(payload).eq('id', editAsset.id)
     if (error) { setEditError(error.message); setEditSaving(false); return }
+
+    // Senkronizasyon: update_asset_stats çağrıldığında kullanıcının el ile girdiği adet ve maliyet ezilmesin
+    if (!['bes', 'vadeli', 'nakit'].includes(editAsset.type)) {
+      const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      await syncInitialTransaction(editAsset.id, newQty, newCost, isUsdType, usdRate)
+    }
 
     setEditSaving(false)
     setEditAsset(null)
@@ -302,6 +353,7 @@ const Assets = () => {
       if (manualForm.interest_rate) updatePayload.interest_rate = Number(manualForm.interest_rate)
       if (manualForm.start_date) updatePayload.start_date = manualForm.start_date
       if (manualForm.maturity_days) {
+        updatePayload.maturity_days = Number(manualForm.maturity_days)
         const maturityDate = new Date(manualForm.start_date)
         maturityDate.setDate(maturityDate.getDate() + Number(manualForm.maturity_days))
         updatePayload.maturity_date = maturityDate.toISOString().split('T')[0]
@@ -403,6 +455,17 @@ const Assets = () => {
                   <option value="Core">Core</option>
                   <option value="Value">Value</option>
                   <option value="Growth">Growth</option>
+                </select>
+              </div>
+            )}
+
+            {(editAsset.type === 'usd_hisse' || editAsset.type === 'hisse') && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>Sektör</label>
+                <select value={editForm.sector || 'Diğer'} onChange={e => setEditForm({ ...editForm, sector: e.target.value })} style={inputStyle}>
+                  {SECTOR_OPTIONS.map(sec => (
+                    <option key={sec} value={sec}>{sec}</option>
+                  ))}
                 </select>
               </div>
             )}
@@ -666,6 +729,16 @@ const Assets = () => {
                     </select>
                   </div>
                 )}
+                {form.type === 'usd_hisse' && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={labelStyle}>Sektör</label>
+                    <select value={form.sector || 'Diğer'} onChange={e => setForm({ ...form, sector: e.target.value })} style={inputStyle}>
+                      {SECTOR_OPTIONS.map(sec => (
+                        <option key={sec} value={sec}>{sec}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div><label style={labelStyle}>Adet</label><input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
                   <div><label style={labelStyle}>Birim Fiyat ($)</label><input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="240" style={inputStyle} /></div>
@@ -676,9 +749,21 @@ const Assets = () => {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div><label style={labelStyle}>Adet</label><input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
-                <div><label style={labelStyle}>Ort. Maliyet (₺)</label><input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} /></div>
+              <div>
+                {form.type === 'hisse' && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={labelStyle}>Sektör</label>
+                    <select value={form.sector || 'Diğer'} onChange={e => setForm({ ...form, sector: e.target.value })} style={inputStyle}>
+                      {SECTOR_OPTIONS.map(sec => (
+                        <option key={sec} value={sec}>{sec}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div><label style={labelStyle}>Adet</label><input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Ort. Maliyet (₺)</label><input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} /></div>
+                </div>
               </div>
             )
           )}

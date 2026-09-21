@@ -16,6 +16,12 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const signOutHooks = new Set<() => void>();
+export const registerSignOutHook = (cb: () => void) => {
+  signOutHooks.add(cb);
+  return () => { signOutHooks.delete(cb); };
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +61,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signOut = async () => {
+    signOutHooks.forEach(cb => {
+      try { cb(); } catch (e) { console.error('SignOut hook error:', e); }
+    });
     await supabase.auth.signOut();
     setUser(null);
   };

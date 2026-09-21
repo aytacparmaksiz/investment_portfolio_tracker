@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { useAuth } from './AuthContext'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { useAuth, registerSignOutHook } from './AuthContext'
 import { supabase } from '../lib/supabase'
 import { FALLBACK_USD_RATE } from '../lib/constants'
 import { fetchAllPrices } from '../lib/prices'
@@ -15,6 +15,7 @@ interface PortfolioContextType {
   lastUpdated: Date | null
   portfolioId: string | null
   refresh: (force?: boolean) => Promise<void>
+  resetPortfolio: () => void
   isHidden: boolean
   setIsHidden: (hidden: boolean) => void
 }
@@ -32,6 +33,27 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [hasFetched, setHasFetched] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
+  const resetPortfolio = useCallback(() => {
+    setAssets([])
+    setPrices({})
+    setPortfolioId(null)
+    setHasFetched(false)
+    setLastUpdated(null)
+    setLoading(true)
+  }, [])
+
+  // Oturum kapatıldığında veya kullanıcı değiştiğinde context belleğini anında ve eksiksiz temizle
+  useEffect(() => {
+    const unregister = registerSignOutHook(() => {
+      resetPortfolio()
+    })
+    return unregister
+  }, [resetPortfolio])
+
+  useEffect(() => {
+    resetPortfolio()
+  }, [user?.id, resetPortfolio])
+
   const refresh = useCallback(async (force = false) => {
     if (!user) return
     if (hasFetched && !force) { setLoading(false); return }
@@ -40,7 +62,16 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       .from('portfolios').select('id').eq('user_id', user.id)
 
     if (!portfolios?.length) {
-      await supabase.from('portfolios').insert({ user_id: user.id, name: 'Ana Portföy' })
+      const { data: newP } = await supabase
+        .from('portfolios')
+        .insert({ user_id: user.id, name: 'Ana Portföy' })
+        .select('id')
+        .single()
+
+      if (newP?.id) {
+        setPortfolioId(newP.id)
+      }
+      setAssets([])
       setLoading(false)
       setHasFetched(true)
       return
@@ -75,15 +106,18 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
       const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
 
-      const tv = loaded.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
-      const tc = loaded.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
+      // Snapshot İzolasyonu: Sadece kullanıcının kendi şahsi portföyüne ait varlıklar snapshot'a yazılır
+      const personalAssets = loaded.filter(a => a.portfolio_id === portfolios[0].id)
+
+      const tv = personalAssets.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
+      const tc = personalAssets.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
       
-      const performanceValue = loaded.reduce((sum, a) => {
+      const performanceValue = personalAssets.reduce((sum, a) => {
         if (!isPerformanceAsset(a)) return sum
         return sum + getCurrentValue(a, fetched, usdtry)
       }, 0)
       
-      const performanceCost = loaded.reduce((sum, a) => {
+      const performanceCost = personalAssets.reduce((sum, a) => {
         if (!isPerformanceAsset(a)) return sum
         return sum + getCostValue(a, usdtry)
       }, 0)
@@ -94,7 +128,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   }, [user, hasFetched])
 
   return (
-    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, isHidden, setIsHidden }}>
+    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, resetPortfolio, isHidden, setIsHidden }}>
       {children}
     </PortfolioContext.Provider>
   )

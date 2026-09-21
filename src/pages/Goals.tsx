@@ -3,7 +3,7 @@ import { FALLBACK_USD_RATE } from '../lib/constants'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { fetchHistoricalRate } from '../lib/historicalRate'
+import { fetchHistoricalRatesBatch } from '../lib/historicalRate'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts'
 
 const GOAL_USD = 1000000
@@ -19,34 +19,27 @@ const Goals = () => {
   const [savings, setSavings] = useState<any[]>([])
   const [monthlyExpenseUSD, setMonthlyExpenseUSD] = useState('3300')
   const [targetYearsInput, setTargetYearsInput] = useState('')
-  const [historicalRates, setHistoricalRates] = useState<Record<string, number>>({})
+  const [fireMode, setFireMode] = useState<'dinamik' | 'sabit'>('dinamik')
   const [showDistribution, setShowDistribution] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  const [showAssetForm, setShowAssetForm] = useState(false)
   const [showAssetList, setShowAssetList] = useState(false)
-  const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
-
+  const [showAssetForm, setShowAssetForm] = useState(false)
   const [showSavingForm, setShowSavingForm] = useState(false)
   const [showManageSavings, setShowManageSavings] = useState(false)
   const [savingType, setSavingType] = useState<'giris' | 'cekim'>('giris')
-  const [savingForm, setSavingForm] = useState({ 
-    month: new Date().toISOString().slice(0, 7), 
-    amount_try: '',
-    income_try: '',
-    note: ''
-  })
-  
-  const [fireMode, setFireMode] = useState<'dinamik' | 'sabit'>('dinamik')
   const [showReturnDetails, setShowReturnDetails] = useState(false)
+  
+  const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
+  const [savingForm, setSavingForm] = useState({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '', note: '' })
+  
+  const [historicalRates, setHistoricalRates] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
 
   const CustomizedLineLabel = (props: any) => {
     const { x, y, value } = props
-    if (value === undefined || value === null || isHidden) return null
+    if (value == null || isHidden) return null
     return (
       <g>
-        <rect x={x - 22} y={y - 22} width={44} height={16} rx={4} fill="#e6f4ea" stroke="#10b981" strokeWidth={1} />
-        <text x={x} y={y - 11} fill="#059669" fontSize={10} fontWeight="700" textAnchor="middle">
+        <text x={x} y={y - 8} fill="#10b981" fontSize={10} fontWeight={700} textAnchor="middle">
           %{Number(value).toFixed(1)}
         </text>
       </g>
@@ -61,15 +54,11 @@ const Goals = () => {
         '2023-09-01', // BES Anchor
         ...assets.map(a => (a.start_date || a.created_at || '').split('T')[0]),
         ...savings.map(s => String(s.month).slice(0, 10))
-      ])).filter(d => d && !historicalRates[d as string])
+      ])).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d as string) && !historicalRates[d as string])
 
       if (datesToFetch.length === 0) return
 
-      const newRates: Record<string, number> = {}
-      for (const date of datesToFetch) {
-        const rate = await fetchHistoricalRate(date as string)
-        if (rate) newRates[date as string] = rate
-      }
+      const newRates = await fetchHistoricalRatesBatch(datesToFetch as string[])
       if (Object.keys(newRates).length > 0) {
         setHistoricalRates(prev => ({ ...prev, ...newRates }))
       }
@@ -374,6 +363,11 @@ const Goals = () => {
     if (isHidden) return '••••••'
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
+
+  const fcUSD = (val: number, maxDigits = 0) => {
+    if (isHidden) return '••••••'
+    return '$' + Number(val).toLocaleString('en-US', { maximumFractionDigits: maxDigits })
+  }
   
   const monthlyTotals: Record<string, { gelir: number; tasarruf: number; monthDate: string }> = {}
   savings.forEach(s => {
@@ -454,7 +448,7 @@ const Goals = () => {
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Toplam Varlık</p>
-              <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{progressPct.toFixed(1)}</p>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</p>
             </div>
 
             <div style={{ position: 'relative', height: '24px', background: 'var(--bg-elevated)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -476,12 +470,12 @@ const Goals = () => {
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Şu An</p>
                 <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(grandTotal)}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${(grandTotal / usdRate).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(grandTotal / usdRate)}</p>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Kalan</p>
                 <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(Math.max(goalTRY - grandTotal, 0))}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${Math.max((goalTRY - grandTotal) / usdRate, 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(Math.max((goalTRY - grandTotal) / usdRate, 0))}</p>
               </div>
             </div>
           </div>
@@ -491,9 +485,9 @@ const Goals = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <div>
                 <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sıradaki Milestone</p>
-                <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>${nextMilestoneUSD.toLocaleString('en-US')}</p>
+                <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{fcUSD(nextMilestoneUSD)}</p>
               </div>
-              <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{milestoneProgressPct.toFixed(1)}</p>
+              <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent)' }}>%{isHidden ? '••' : milestoneProgressPct.toFixed(1)}</p>
             </div>
 
             <div style={{ position: 'relative', height: '16px', background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -507,8 +501,8 @@ const Goals = () => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>${Math.floor(currentNW_USD).toLocaleString('en-US')}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>Hedefe Kalan: ${(nextMilestoneUSD - currentNW_USD).toLocaleString('en-US', {maximumFractionDigits:0})}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>{fcUSD(Math.floor(currentNW_USD))}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>Hedefe Kalan: {fcUSD(nextMilestoneUSD - currentNW_USD)}</span>
             </div>
 
             {fireData && (
@@ -749,7 +743,7 @@ const Goals = () => {
                               <p style={{ color: '#80cbd0' }}>Gelir: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.gelir)}</strong></p>
                               <p style={{ color: '#264653' }}>Tasarruf: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.tasarruf)}</strong></p>
                               <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-light)', color: '#10b981', fontWeight: '700' }}>
-                                Tasarruf Oranı: %{data.oran.toFixed(1)}
+                                Tasarruf Oranı: %{isHidden ? '••' : data.oran.toFixed(1)}
                               </div>
                             </div>
                           );
@@ -803,7 +797,7 @@ const Goals = () => {
                         <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                           <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>FIRE Hedefi</p>
                           <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(fireData.fireTargetTRY)}</p>
-                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>${fireData.fireTargetUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(fireData.fireTargetUSD)}</p>
                         </div>
                         <div 
                           onClick={() => setShowReturnDetails(!showReturnDetails)}
@@ -943,7 +937,7 @@ const Goals = () => {
                       <div style={{ flex: 1, paddingBottom: isLast ? '0' : '20px', marginTop: '-2px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                           <p style={{ fontWeight: '800', fontSize: '15px', color: m.reached ? 'var(--green)' : isNext ? 'var(--accent)' : 'var(--text-primary)' }}>
-                            ${m.target.toLocaleString('en-US')}
+                            {fcUSD(m.target)}
                           </p>
                           {m.reached ? (
                             <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', background: 'var(--green-dim)', padding: '2px 8px', borderRadius: '10px' }}>Ulaşıldı ✓</span>
@@ -955,8 +949,8 @@ const Goals = () => {
                         {isNext && (
                           <div style={{ marginTop: '10px', marginBottom: '8px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Şu an: ${Math.floor(currentLiquidUSD).toLocaleString('en-US')}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '700' }}>%{progressPct.toFixed(1)}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Şu an: {fcUSD(Math.floor(currentLiquidUSD))}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '700' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</span>
                             </div>
                             <div style={{ position: 'relative', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                               <div style={{
