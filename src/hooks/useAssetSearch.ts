@@ -13,7 +13,7 @@ export const useAssetSearch = () => {
     if (type === 'kripto') {
       setSearching(true);
       try {
-        const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${value}`);
+        const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${encodeURIComponent(value)}`);
         const data = await res.json();
         setSearchResults(data.coins || []);
       } catch { 
@@ -37,7 +37,40 @@ export const useAssetSearch = () => {
     }
 
     if (type === 'fon') { 
-      setSearchResults([]); 
+      const clean = value.trim().toUpperCase().replace(/^(TEFAS|FON):/, '').replace(/\.IS$/, '');
+      if (clean.length >= 2) {
+        setSearching(true);
+        try {
+          const endpoints = [
+            `https://kumbaram-three.vercel.app/api/tefas?fundCode=${encodeURIComponent(clean)}`,
+            `/api/tefas?fundCode=${encodeURIComponent(clean)}`
+          ];
+          let foundTitle: string | null = null;
+          for (const url of endpoints) {
+            try {
+              const res = await fetch(url);
+              if (res.ok) {
+                const data = await res.json();
+                foundTitle = data?.prices?.[0]?.title || data?.title || null;
+                if (foundTitle) break;
+              }
+            } catch {
+              // sonraki endpoint
+            }
+          }
+          setSearchResults([{
+            symbol: clean,
+            name: foundTitle || `${clean} TEFAS Fonu`,
+            type: 'FON',
+            exchange: 'TEFAS'
+          }]);
+        } catch {
+          setSearchResults([{ symbol: clean, name: `${clean} Yatırım Fonu`, type: 'FON', exchange: 'TEFAS' }]);
+        }
+        setSearching(false);
+      } else {
+        setSearchResults([]);
+      }
       return; 
     }
 

@@ -22,7 +22,7 @@ export async function saveSnapshot(
     .select('id')
     .eq('portfolio_id', portfolioId)
     .eq('snapshot_date', today)
-    .single()
+    .maybeSingle()
 
   if (existing) {
     // Varsa güncelle

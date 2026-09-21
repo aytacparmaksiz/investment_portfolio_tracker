@@ -15,32 +15,61 @@ const CRYPTO_IDS: Record<string, string> = {
   ADA: 'cardano',
   LINK: 'chainlink',
   LTC: 'litecoin',
-  // Yeni eklenen Pharaoh Liquid Staking Token
   P33: 'pharaoh-liquid-staking-token',
   USDC: 'usd-coin',
 }
 
-
-async function fetchPrice(symbol: string): Promise<number | null> {
-  try {
-    const res = await fetch(`${API_BASE}?symbol=${symbol}`)
-    const data = await res.json()
-    return data?.price ? Number(data.price) : null
-  } catch {
-    return null
-  }
+export interface PriceDetail {
+  price: number
+  dailyPct?: number
 }
 
-export async function fetchCryptoPrice(symbol: string): Promise<{ try: number; usd: number } | null> {
+export async function fetchPriceDetails(symbol: string): Promise<PriceDetail | null> {
+  const cleanSymbol = symbol.trim().toUpperCase()
+  const endpoints = [
+    `${API_BASE}?symbol=${encodeURIComponent(cleanSymbol)}`,
+    `/api/price?symbol=${encodeURIComponent(cleanSymbol)}`
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 6000)
+      const res = await fetch(url, { signal: controller.signal })
+      clearTimeout(timeoutId)
+
+      if (!res.ok) continue
+      const data = await res.json()
+      if (data?.price != null && !isNaN(Number(data.price))) {
+        return {
+          price: Number(data.price),
+          dailyPct: data.dailyPct != null && !isNaN(Number(data.dailyPct)) ? Number(data.dailyPct) : undefined
+        }
+      }
+    } catch {
+      // sonraki endpointi dene
+    }
+  }
+
+  return null
+}
+
+export async function fetchPrice(symbol: string): Promise<number | null> {
+  const details = await fetchPriceDetails(symbol)
+  return details ? details.price : null
+}
+
+export async function fetchCryptoPrice(symbol: string): Promise<{ try: number; usd: number; dailyPct?: number } | null> {
   try {
-    const id = CRYPTO_IDS[symbol.toUpperCase()]
+    const id = CRYPTO_IDS[symbol.trim().toUpperCase()]
     if (!id) return null
-    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd`)
+    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`)
     const data = await res.json()
     const tryPrice = data?.[id]?.try
     const usdPrice = data?.[id]?.usd
+    const dailyPct = data?.[id]?.usd_24h_change != null ? Number(data[id].usd_24h_change) : undefined
     if (!tryPrice || !usdPrice) return null
-    return { try: tryPrice, usd: usdPrice }
+    return { try: Number(tryPrice), usd: Number(usdPrice), dailyPct }
   } catch {
     return null
   }
@@ -53,61 +82,134 @@ function formatDateTR(date: Date): string {
   return `${d}.${m}.${y}`
 }
 
-export async function fetchFundPrice(fundCode: string): Promise<number | null> {
-  try {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(start.getDate() - 10) // hafta sonu/tatil için 10 günlük tampon
+export async function fetchFundDetails(fundCode: string): Promise<PriceDetail | null> {
+  if (!fundCode || !fundCode.trim()) return null
+  const cleanCode = fundCode.trim().toUpperCase().replace(/^(TEFAS|FON):/, '').replace(/\.IS$/, '')
 
-    const params = new URLSearchParams({
-      fundCode: fundCode.toUpperCase(),
-      startDate: formatDateTR(start),
-      endDate: formatDateTR(end),
-    })
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - 10)
 
-    const res = await fetch(`${TEFAS_API}?${params}`)
-    const data = await res.json()
-    const prices = data?.prices || []
-    if (!prices.length) return null
+  const params = new URLSearchParams({
+    fundCode: cleanCode,
+    symbol: cleanCode,
+    startDate: formatDateTR(start),
+    endDate: formatDateTR(end),
+  })
 
-    const sorted = [...prices].sort(
-      (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
-    return sorted[0]?.price ?? null
-  } catch {
-    return null
+  const endpoints = [
+    `${TEFAS_API}?${params}`,
+    `/api/tefas?${params}`
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 7000)
+      const res = await fetch(url, { signal: controller.signal })
+      clearTimeout(timeoutId)
+
+      if (!res.ok) continue
+      const data = await res.json()
+
+      const prices = Array.isArray(data) ? data : (data?.prices || data?.data || [])
+      if (Array.isArray(prices) && prices.length > 0) {
+        const valid = prices.filter((p: any) => p && Number(p.price ?? p.FIYAT ?? p.current_price) > 0)
+        if (valid.length > 0) {
+          const sorted = [...valid].sort(
+            (a: any, b: any) => (a.date || a.TARIH ? new Date(a.date || a.TARIH).getTime() : 0) - (b.date || b.TARIH ? new Date(b.date || b.TARIH).getTime() : 0)
+          )
+          const latest = sorted[sorted.length - 1]
+          const price = Number(latest.price ?? latest.FIYAT ?? latest.current_price)
+          if (!isNaN(price) && price > 0) {
+            let dailyPct = (latest.dailyPct != null || latest.daily_return != null)
+              ? Number(latest.dailyPct ?? latest.daily_return)
+              : undefined
+            if (dailyPct === undefined && sorted.length >= 2) {
+              const prev = Number(sorted[sorted.length - 2].price ?? sorted[sorted.length - 2].FIYAT ?? sorted[sorted.length - 2].current_price)
+              if (prev > 0) {
+                dailyPct = ((price - prev) / prev) * 100
+              }
+            }
+            return { price, dailyPct }
+          }
+        }
+      }
+
+      const directPrice = Number(data?.price ?? data?.current_price ?? data?.FIYAT)
+      if (!isNaN(directPrice) && directPrice > 0) {
+        return {
+          price: directPrice,
+          dailyPct: (data?.dailyPct != null || data?.daily_return != null)
+            ? Number(data.dailyPct ?? data.daily_return)
+            : undefined
+        }
+      }
+    } catch {
+      // diğer endpoint
+    }
   }
+
+  return null
+}
+
+export async function fetchFundPrice(fundCode: string): Promise<number | null> {
+  const details = await fetchFundDetails(fundCode)
+  return details ? details.price : null
 }
 
 export async function fetchAllPrices(assets: any[]): Promise<Record<string, number>> {
   const prices: Record<string, number> = {}
 
   // Önce USD/TRY kuru al
-  const usdtry = await fetchPrice('USDTRY=X') ?? 38
+  const usdtryDetail = await fetchPriceDetails('USDTRY=X')
+  const usdtry = usdtryDetail?.price ?? 38
   prices['USDTRY=X'] = usdtry
+  if (usdtryDetail?.dailyPct !== undefined) {
+    prices['USDTRY=X_dailypct'] = usdtryDetail.dailyPct
+  }
 
   await Promise.all(assets.map(async (asset) => {
     if (!asset.symbol) return
-    const sym = asset.symbol.toUpperCase()
+    const rawSym = asset.symbol
+    const sym = rawSym.trim().toUpperCase()
+
+    const setPrice = (key: string, val: number, daily?: number) => {
+      prices[key] = val
+      prices[rawSym] = val
+      prices[sym] = val
+      prices[sym.toLowerCase()] = val
+      if (daily !== undefined) {
+        prices[key + '_dailypct'] = daily
+        prices[rawSym + '_dailypct'] = daily
+        prices[sym + '_dailypct'] = daily
+        prices[sym.toLowerCase() + '_dailypct'] = daily
+      }
+    }
 
     if (asset.type === 'hisse') {
-      let price = await fetchPrice(`${sym}.IS`)
-      if (!price) price = await fetchPrice(`${sym}.E.IS`)
-      if (price) prices[sym] = price
+      let detail = await fetchPriceDetails(`${sym}.IS`)
+      if (!detail) detail = await fetchPriceDetails(`${sym}.E.IS`)
+      if (detail) {
+        setPrice(sym, detail.price, detail.dailyPct)
+      }
 
-    } else if (asset.type === 'usd_hisse') {
-      const usdPrice = await fetchPrice(sym)
-      if (usdPrice) prices[sym] = usdPrice * usdtry
-
-    } else if (asset.type === 'etf') {
-      const usdPrice = await fetchPrice(sym)
-      if (usdPrice) prices[sym] = usdPrice * usdtry
+    } else if (asset.type === 'usd_hisse' || asset.type === 'etf') {
+      const detail = await fetchPriceDetails(sym)
+      if (detail) {
+        setPrice(sym, detail.price * usdtry, detail.dailyPct)
+        prices[sym + '_usd'] = detail.price
+        prices[rawSym + '_usd'] = detail.price
+        prices[sym.toLowerCase() + '_usd'] = detail.price
+      }
 
     } else if (asset.type === 'kripto') {
       const cryptoPrice = await fetchCryptoPrice(sym)
       if (cryptoPrice) {
-        prices[sym] = cryptoPrice.try
+        setPrice(sym, cryptoPrice.try, cryptoPrice.dailyPct)
         prices[sym + '_usd'] = cryptoPrice.usd
+        prices[rawSym + '_usd'] = cryptoPrice.usd
+        prices[sym.toLowerCase() + '_usd'] = cryptoPrice.usd
       }
 
     } else if (asset.type === 'doviz') {
@@ -115,35 +217,40 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
         USD: 'USDTRY=X', EUR: 'EURTRY=X', GBP: 'GBPTRY=X', CHF: 'CHFTRY=X'
       }
       const yahooSym = dovizMap[sym] || `${sym}TRY=X`
-      const price = await fetchPrice(yahooSym)
-      if (price) prices[sym] = price
+      const detail = await fetchPriceDetails(yahooSym)
+      if (detail) {
+        setPrice(sym, detail.price, detail.dailyPct)
+      }
 
     } else if (asset.type === 'altin') {
-      const xauPrice = await fetchPrice('GC=F')
-      if (xauPrice) {
-        // Gram Altın (24 Ayar Has Altın) fiyatını hesapla
+      const detail = await fetchPriceDetails('GC=F')
+      if (detail) {
+        const xauPrice = detail.price
         const gramGoldPrice = (xauPrice / 31.1035) * usdtry
+        const daily = detail.dailyPct
 
         if (sym === 'TRYG') {
-          prices[sym] = gramGoldPrice
+          setPrice(sym, gramGoldPrice, daily)
         } else if (sym === 'CEYREK') {
-          prices[sym] = gramGoldPrice * 1.6065
+          setPrice(sym, gramGoldPrice * 1.6065, daily)
         } else if (sym === 'YARIM') {
-          prices[sym] = gramGoldPrice * 3.2130
+          setPrice(sym, gramGoldPrice * 3.2130, daily)
         } else if (sym === 'TAM') {
-          prices[sym] = gramGoldPrice * 6.4260
+          setPrice(sym, gramGoldPrice * 6.4260, daily)
         } else if (sym === 'CUMHURIYET' || sym === 'ATA') {
-          prices[sym] = gramGoldPrice * 7.2160
+          setPrice(sym, gramGoldPrice * 7.2160, daily)
         } else if (sym === 'XAU') {
-          prices[sym] = xauPrice
+          setPrice(sym, xauPrice, daily)
         } else {
-          prices[sym] = xauPrice * usdtry
+          setPrice(sym, xauPrice * usdtry, daily)
         }
       }
 
     } else if (asset.type === 'fon') {
-      const price = await fetchFundPrice(sym)
-      if (price) prices[sym] = price
+      const fundDetail = await fetchFundDetails(sym)
+      if (fundDetail) {
+        setPrice(sym, fundDetail.price, fundDetail.dailyPct)
+      }
     }
   }))
 

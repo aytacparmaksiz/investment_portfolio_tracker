@@ -4,15 +4,16 @@ import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { fetchSnapshots } from '../lib/snapshot'
-import { calculateComparison } from '../lib/comparison'
-import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
+import { calculateComparison, fetchHistoricalPrices } from '../lib/comparison'
+import { fetchPrice } from '../lib/prices'
+import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
+import { buildBenchmarkSeries } from '../lib/benchmark'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 
 const Analytics = () => {
   const { user } = useAuth()
   const { assets, prices, portfolioId, refresh, isHidden } = usePortfolio()
-  const navigate = useNavigate()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
   
@@ -25,6 +26,13 @@ const Analytics = () => {
   const [firstTxDate, setFirstTxDate] = useState<string>('')
   const [expandedAssetGroups, setExpandedAssetGroups] = useState<Set<string>>(new Set())
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set())
+
+  // QQQM Benchmark verileri
+  const [benchmarkPrices, setBenchmarkPrices] = useState<{
+    qqqm: { date: string; price: number }[];
+    usd: { date: string; price: number }[];
+    liveQqqm: number;
+  }>({ qqqm: [], usd: [], liveQqqm: 304.12 })
 
   useEffect(() => { 
     refresh()
@@ -74,6 +82,24 @@ const Analytics = () => {
   const loadSnapshots = async (pid: string, days: number) => {
     const data = await fetchSnapshots(pid, days)
     setSnapshots(data)
+
+    const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
+    const fromDate = (data.length > 1 && data[0].snapshot_date < defaultRangeDate)
+      ? data[0].snapshot_date
+      : (firstTxDate && firstTxDate < defaultRangeDate ? firstTxDate : defaultRangeDate)
+
+    // QQQM ve USDTRY geçmiş fiyatlarını ve anlık QQQM fiyatını paralel çek
+    const [qqqmData, usdData, liveQqqmData] = await Promise.all([
+      fetchHistoricalPrices('QQQM', fromDate),
+      fetchHistoricalPrices('USDTRY=X', fromDate),
+      fetchPrice('QQQM')
+    ])
+
+    setBenchmarkPrices({
+      qqqm: qqqmData,
+      usd: usdData,
+      liveQqqm: liveQqqmData || 304.12
+    })
   }
 
   const fc = (val: number) => {
@@ -81,67 +107,38 @@ const Analytics = () => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr)
-    return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })}`
-  }
+  const earliestActiveDate = useMemo(() => {
+    const active = assets.filter(isPerformanceAsset)
+    const dates = active
+      .map(a => (a.start_date || a.created_at || '').split('T')[0])
+      .filter(Boolean)
+      .sort()
+    return dates[0] || firstTxDate || ''
+  }, [assets, firstTxDate])
 
-  // --- GRAFİK VERİSİ HESAPLAMASI ---
-  const chartData = useMemo(() => {
-    const todayRaw = new Date().toISOString().split('T')[0];
-    let runningQqqmValue = 0;
-    let runningInvested = 0;
-    let previousActiveCost = 0;
-    let benchmarkStarted = false;
+  const currentActiveCost = useMemo(() => {
+    if (totalCost > 0) return totalCost
+    const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+    return assets.filter(isPerformanceAsset).reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+  }, [totalCost, assets, prices])
 
-    return snapshots.map((s: any, index: number) => {
-      // 1. TÜM SERVET VERİLERİ (BES Dahil - Geçmişten Bugüne)
-      const totalV = Number(s.total_value || 0);
-      const totalC = Number(s.total_cost || 0);
-      const totalKar = totalC > 0 ? totalV - totalC : 0;
-      
-      // 2. AKTİF PERFORMANS VERİLERİ (BES Hariç - QQQM Yarışı İçin)
-      const activeV = Number(s.performance_value || totalV);
-      const activeC = Number(s.performance_cost || totalC);
+  // --- GRAFİK VE QQQM BENCHMARK HESAPLAMASI ---
+  const { chartData, benchmarkSummary } = useMemo(() => {
+    const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+    const effectiveFirstDate = firstTxDate || earliestActiveDate
+    const effectiveCost = totalCost > 0 ? totalCost : currentActiveCost
 
-      const isTodayOrAfter = s.snapshot_date >= todayRaw || index === snapshots.length - 1; 
-
-      let qqqm = null;
-      let inv = null;
-      let actV = null;
-
-      if (isTodayOrAfter) {
-        if (!benchmarkStarted) {
-           // YARIŞIN MİLADI (1. GÜN)
-           runningQqqmValue = activeV;
-           runningInvested = activeV;
-           previousActiveCost = activeC;
-           benchmarkStarted = true;
-        } else {
-           const costDelta = activeC - previousActiveCost;
-           if (costDelta !== 0) {
-             runningQqqmValue += costDelta;
-             runningInvested += costDelta;
-           }
-           previousActiveCost = activeC;
-        }
-        qqqm = runningQqqmValue;
-        inv = runningInvested;
-        actV = activeV;
-      }
-
-      return {
-        date: formatDate(s.snapshot_date),
-        deger: totalV,         
-        maliyet: totalC,       
-        kar: totalKar,         
-        aktifDeger: actV,      
-        aktifMaliyet: inv,     
-        qqqmDeger: qqqm,       
-        hasPerformanceData: true
-      }
-    })
-  }, [snapshots])
+    const { points, summary } = buildBenchmarkSeries(
+      snapshots,
+      benchmarkPrices.qqqm,
+      benchmarkPrices.usd,
+      benchmarkPrices.liveQqqm,
+      usdRateLocal,
+      effectiveFirstDate,
+      effectiveCost
+    )
+    return { chartData: points, benchmarkSummary: summary }
+  }, [snapshots, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
   const first = chartData[0]?.deger || 0
@@ -150,14 +147,8 @@ const Analytics = () => {
   const totalGainPct = first > 0 ? (totalGain / first) * 100 : 0
   const latestProfit = Number(chartData[chartData.length - 1]?.kar || 0)
 
-  // Benchmark Banner (Tepe Bar) hesaplamaları
-  const lastData = chartData[chartData.length - 1];
-  const qqqmDiff = lastData && lastData.qqqmDeger !== null ? lastData.aktifDeger - lastData.qqqmDeger : 0;
-  const qqqmDiffPct = lastData && lastData.qqqmDeger > 0 ? (qqqmDiff / lastData.qqqmDeger) * 100 : 0;
-  const isBehind = qqqmDiff < 0;
-
-  // QQQM Grafiği verisi (sadece yarış başladıktan sonrası)
-  const benchmarkData = chartData.filter(d => d.qqqmDeger !== null);
+  // Benchmark Grafiği verisi (tüm geçerli noktalar)
+  const benchmarkData = chartData.filter(d => d.qqqmDeger > 0)
 
   const ranges = [
     { label: '7G', value: 7 },
@@ -180,19 +171,19 @@ const Analytics = () => {
 
       <div style={{ paddingTop: '16px', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Analitik</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Portföy performansı</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Portföy performansı & Benchmark</p>
       </div>
 
       {/* Varlıklar Sekmesi */}
       {activeTab === 'varliklar' && (() => {
         const ASSET_LABELS: Record<string, string> = {
           hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: '₿ Kripto',
-          etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın'
+          etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 TEFAS Fon'
         }
         const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const TYPE_COLORS: Record<string, string> = {
           hisse: '#35D6ED', usd_hisse: '#1A224C', kripto: '#8b5cf6',
-          etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2'
+          etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2', fon: '#059669'
         }
         const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
         const groups: Record<string, any[]> = {}
@@ -395,12 +386,12 @@ const Analytics = () => {
       {/* Performans Sekmesi */}
       {activeTab === 'performans' && (
         <>
-          {snapshots.length < 2 ? (
+          {chartData.length < 1 ? (
             <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
               <p style={{ fontSize: '40px', marginBottom: '12px' }}>📊</p>
               <p style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>Henüz yeterli veri yok</p>
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5' }}>
-                Grafik oluşması için en az 2 gün fiyat yenilemen gerekiyor.
+                Grafik oluşması için ana sayfadan fiyatları yenileyerek portföy snapshot'ı kaydetmeniz gerekiyor.
               </p>
             </div>
           ) : (
@@ -479,26 +470,44 @@ const Analytics = () => {
               {/* GRAFİK 3: Aktif Performans (QQQM) YARIŞI */}
               <div style={{ ...card, marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px' }}>
-                  <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Performans vs Nasdaq</p>
-                  <span title="Bu grafiğe BES dahil değildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
+                  <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Performans vs Nasdaq (QQQM)</p>
+                  <span title="Bu grafiğe BES dahil değildir. Aktif portföyünüzün yatırılan sermayesi üzerinden simüle edilen QQQM ETF performansı ile doğrudan kıyaslamasıdır." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
                 </div>
 
                 {benchmarkData.length < 2 ? (
                    <div style={{ padding: '24px 0', textAlign: 'center' }}>
                      <p style={{ fontSize: '28px', marginBottom: '8px' }}>🏁</p>
-                     <p style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>Yarış Bugün Başladı!</p>
+                     <p style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>Benchmark Verisi Birikiyor</p>
                      <p style={{ color: 'var(--text-secondary)', fontSize: '12px', padding: '0 20px' }}>
-                       QQQM ile aktif portföyünün kıyaslaması için yarına kadar veri birikmesi bekleniyor.
+                       QQQM ile aktif portföy kıyaslaması için en az 2 güne ait portföy snapshot verisi gerekiyor.
                      </p>
                    </div>
                 ) : (
                   <>
-                    {lastData && lastData.qqqmDeger !== null && (
-                      <div style={{ background: isBehind ? '#fef2f2' : '#f0fdf4', border: `1px solid ${isBehind ? '#fecaca' : '#bbf7d0'}`, borderRadius: '8px', padding: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '16px' }}>{isBehind ? '📉' : '📈'}</span>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          Bugün başlayan yarışta QQQM'in <strong style={{ color: isBehind ? 'var(--red)' : 'var(--green)' }}>{isHidden ? '••••••' : fc(Math.abs(qqqmDiff))} ({Math.abs(qqqmDiffPct).toFixed(2)}%)</strong> {isBehind ? 'gerisindesin.' : 'önündesin!'}
-                        </p>
+                    {benchmarkSummary && (
+                      <div style={{
+                        background: benchmarkSummary.isBehind ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                        border: `1px solid ${benchmarkSummary.isBehind ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                        marginBottom: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}>
+                        <span style={{ fontSize: '22px' }}>{benchmarkSummary.isBehind ? '📉' : '🚀'}</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
+                            Aktif portföyün QQQM benchmark'ının{' '}
+                            <strong style={{ color: benchmarkSummary.isBehind ? 'var(--red)' : 'var(--green)' }}>
+                              {isHidden ? '••••••' : fc(Math.abs(benchmarkSummary.diffAmount))} (%{Math.abs(benchmarkSummary.diffPercent).toFixed(2)})
+                            </strong>{' '}
+                            {benchmarkSummary.isBehind ? 'gerisinde.' : 'önünde!'}
+                          </p>
+                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                            Dönem Getirisi: Portföy <strong>%{benchmarkSummary.activeReturnPct.toFixed(1)}</strong> vs QQQM <strong>%{benchmarkSummary.qqqmReturnPct.toFixed(1)}</strong>
+                          </p>
+                        </div>
                       </div>
                     )}
 
@@ -512,10 +521,10 @@ const Analytics = () => {
                         </defs>
                         <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={20} />
                         <YAxis domain={['auto', 'auto']} tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                        <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM' : 'Ana Para']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                        <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM Benchmark' : 'Yatırılan Ana Para']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                        <Area type="monotone" dataKey="aktifDeger" name="aktifDeger" stroke="#3b82f6" fill="url(#colorAktif)" strokeWidth={2} isAnimationActive={false} />
                         <Line type="stepAfter" dataKey="aktifMaliyet" name="aktifMaliyet" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                         <Line type="monotone" dataKey="qqqmDeger" name="qqqmDeger" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
-                        <Area type="monotone" dataKey="aktifDeger" name="aktifDeger" stroke="#3b82f6" fill="url(#colorAktif)" strokeWidth={2} isAnimationActive={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                     
@@ -528,12 +537,12 @@ const Analytics = () => {
                 )}
               </div>
 
-              {totalCost > 0 && firstTxDate && (
+              {(totalCost > 0 || currentActiveCost > 0) && (
                 <div style={{ ...card, marginBottom: '16px' }}>
                   <div style={{ marginBottom: '12px' }}>
                     <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Alsaydın ne olurdu?</p>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                      {firstTxDate} · {isHidden ? '••••••' : `₺${totalCost.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`} yatırım
+                      {firstTxDate || earliestActiveDate || 'Portföy başlangıcı'} · {isHidden ? '••••••' : `₺${Math.round(totalCost > 0 ? totalCost : currentActiveCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`} aktif yatırım
                     </p>
                   </div>
 
@@ -541,19 +550,19 @@ const Analytics = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
-                        <input type="date" defaultValue="2025-01-01" id="compFromDate"
+                        <input type="date" defaultValue={firstTxDate || earliestActiveDate || "2025-01-01"} id="compFromDate"
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" placeholder={Math.round(totalCost).toString()} id="compTotalCost"
+                        <input type="number" defaultValue={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} placeholder={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} id="compTotalCost"
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <button onClick={async () => {
                         const dateEl = document.getElementById('compFromDate') as HTMLInputElement
                         const costEl = document.getElementById('compTotalCost') as HTMLInputElement
-                        const fromDate = dateEl?.value || '2025-01-01'
-                        const cost = Number(costEl?.value) || totalCost
+                        const fromDate = dateEl?.value || firstTxDate || earliestActiveDate || '2025-01-01'
+                        const cost = Number(costEl?.value) || (totalCost > 0 ? totalCost : currentActiveCost)
                         setCompLoading(true)
                         const result = await calculateComparison(cost, fromDate)
                         setComparison(result)
@@ -569,61 +578,67 @@ const Analytics = () => {
                     <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>⏳ Hesaplanıyor...</p>
                   )}
 
-                  {comparison && (
-                    <div style={{ display: 'grid', gap: '10px' }}>
-                      {[
-                        { label: '📈 S&P 500 alsaydın', value: comparison.sp500, color: '#2563eb' },
-                        { label: 'BIST 100 alsaydın', value: comparison.bist, color: '#dc2626' },
-                        { label: '🥇 Altın alsaydın', value: comparison.gold, color: '#d97706' },
-                        { label: '📊 Enflasyona göre olması gereken', value: comparison.inflation, color: '#6b7280' },
-                      ].map((item, i) => {
-                        if (!item.value) return null
-                        const gain = item.value - totalCost
-                        const gainPct = (gain / totalCost) * 100
-                        const portfolioValue = Number(snapshots[snapshots.length-1]?.total_value || totalCost)
-                        const portfolioGainPct = ((portfolioValue - totalCost) / totalCost) * 100
-                        const beating = portfolioGainPct > gainPct
+                  {comparison && (() => {
+                    const baseCost = Number(comparison.baseCost) || (totalCost > 0 ? totalCost : currentActiveCost)
+                    const latestActiveVal = Number(snapshots[snapshots.length - 1]?.performance_value || snapshots[snapshots.length - 1]?.total_value || baseCost)
+                    const latestActiveCost = Number(snapshots[snapshots.length - 1]?.performance_cost || snapshots[snapshots.length - 1]?.total_cost || baseCost)
+                    const activePortfolioReturnPct = latestActiveCost > 0 ? ((latestActiveVal - latestActiveCost) / latestActiveCost) * 100 : 0
 
-                        return (
-                          <div key={i} style={{ background: `${item.color}10`, border: `1px solid ${item.color}30`, borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.label}</p>
-                              <p style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>
-                                {fc(item.value)}
-                              </p>
-                              <p style={{ fontSize: '11px', color: item.color, fontWeight: '600', marginTop: '2px' }}>
-                                {isHidden ? '••••••' : `${gain >= 0 ? '+' : ''}${gainPct.toFixed(1)}%`}
-                              </p>
+                    return (
+                      <div style={{ display: 'grid', gap: '10px' }}>
+                        {[
+                          { label: '🚀 QQQM (Nasdaq-100) alsaydın', value: comparison.qqqm, color: '#f59e0b' },
+                          { label: '📈 S&P 500 alsaydın', value: comparison.sp500, color: '#2563eb' },
+                          { label: '🇹🇷 BIST 100 alsaydın', value: comparison.bist, color: '#dc2626' },
+                          { label: '🥇 Altın alsaydın', value: comparison.gold, color: '#d97706' },
+                          { label: '📊 Enflasyona göre olması gereken', value: comparison.inflation, color: '#6b7280' },
+                        ].map((item, i) => {
+                          if (!item.value) return null
+                          const gain = item.value - baseCost
+                          const gainPct = baseCost > 0 ? (gain / baseCost) * 100 : 0
+                          const beating = activePortfolioReturnPct > gainPct
+
+                          return (
+                            <div key={i} style={{ background: `${item.color}10`, border: `1px solid ${item.color}30`, borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.label}</p>
+                                <p style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>
+                                  {fc(item.value)}
+                                </p>
+                                <p style={{ fontSize: '11px', color: item.color, fontWeight: '600', marginTop: '2px' }}>
+                                  {isHidden ? '••••••' : `${gain >= 0 ? '+' : ''}${gainPct.toFixed(1)}%`}
+                                </p>
+                              </div>
+                              <div style={{ textAlign: 'center' }}>
+                                <p style={{ fontSize: '28px' }}>{beating ? '✅' : '❌'}</p>
+                                <p style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                                  {beating ? 'Yendin!' : 'Yenildin'}
+                                </p>
+                              </div>
                             </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <p style={{ fontSize: '28px' }}>{beating ? '✅' : '❌'}</p>
-                              <p style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                                {beating ? 'Yendin!' : 'Yenildin'}
-                              </p>
-                            </div>
+                          )
+                        })}
+
+                        <div style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>💼 Aktif Portföyün</p>
+                            <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent)' }}>
+                              {fc(latestActiveVal)}
+                            </p>
+                            <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600', marginTop: '2px' }}>
+                              {isHidden ? '••••••' : `${activePortfolioReturnPct >= 0 ? '+' : ''}${activePortfolioReturnPct.toFixed(1)}%`}
+                            </p>
                           </div>
-                        )
-                      })}
-
-                      <div style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>💼 Portföyün</p>
-                          <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent)' }}>
-                            {fc(Number(snapshots[snapshots.length-1]?.total_value || totalCost))}
-                          </p>
-                          <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600', marginTop: '2px' }}>
-                            {isHidden ? '••••••' : `${(((Number(snapshots[snapshots.length-1]?.total_value || totalCost) - totalCost) / totalCost) * 100).toFixed(1)}%`}
-                          </p>
+                          <p style={{ fontSize: '28px' }}>💼</p>
                         </div>
-                        <p style={{ fontSize: '28px' }}>💼</p>
-                      </div>
 
-                      <button onClick={() => setComparison(null)}
-                        style={{ padding: '8px', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
-                        Yeniden Hesapla
-                      </button>
-                    </div>
-                  )}
+                        <button onClick={() => setComparison(null)}
+                          style={{ padding: '8px', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
+                          Yeniden Hesapla
+                        </button>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
             </>

@@ -75,12 +75,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
       const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
 
-      const tv = loaded.reduce((sum, a) => sum + getCurrentValue(a, fetched), 0)
+      const tv = loaded.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
       const tc = loaded.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
       
       const performanceValue = loaded.reduce((sum, a) => {
         if (!isPerformanceAsset(a)) return sum
-        return sum + getCurrentValue(a, fetched)
+        return sum + getCurrentValue(a, fetched, usdtry)
       }, 0)
       
       const performanceCost = loaded.reduce((sum, a) => {

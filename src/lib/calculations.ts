@@ -20,7 +20,7 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
     }
 
     const vals = a.manual_values || [];
-    return Number(vals[vals.length - 1]?.value || 0);
+    return Number(vals[vals.length - 1]?.value || a.principal || a.avg_cost || 0);
   }
 
   // Nakit
@@ -28,7 +28,11 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  const price = (fetchedPrices && a.symbol) ? fetchedPrices[a.symbol] : undefined;
+  const sym = a.symbol ? a.symbol.trim() : '';
+  const price = (fetchedPrices && sym) 
+    ? (fetchedPrices[sym] ?? fetchedPrices[sym.toUpperCase()] ?? fetchedPrices[sym.toLowerCase()]) 
+    : undefined;
+
   if (price !== undefined) {
     return Number(price) * Number(a.quantity || 0);
   }
