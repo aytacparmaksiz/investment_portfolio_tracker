@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { useAuth, registerSignOutHook } from './AuthContext'
 import { supabase } from '../lib/supabase'
 import { FALLBACK_USD_RATE } from '../lib/constants'
@@ -33,7 +33,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [hasFetched, setHasFetched] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
+  const hasFetchedRef = useRef(false)
+  const isFetchingRef = useRef(false)
+
   const resetPortfolio = useCallback(() => {
+    hasFetchedRef.current = false
+    isFetchingRef.current = false
     setAssets([])
     setPrices({})
     setPortfolioId(null)
@@ -42,7 +47,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true)
   }, [])
 
-  // Oturum kapatıldığında veya kullanıcı değiştiğinde context belleğini anında ve eksiksiz temizle
+  // Oturum kapatıldığında context belleğini anında temizle
   useEffect(() => {
     const unregister = registerSignOutHook(() => {
       resetPortfolio()
@@ -50,13 +55,21 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     return unregister
   }, [resetPortfolio])
 
+  // Kullanıcı oturumu açıldığında veya değiştiğinde portföyü yükle, oturum yoksa temizle
   useEffect(() => {
-    resetPortfolio()
-  }, [user?.id, resetPortfolio])
+    if (user?.id) {
+      refresh(true)
+    } else {
+      resetPortfolio()
+    }
+  }, [user?.id])
 
   const refresh = useCallback(async (force = false) => {
     if (!user) return
-    if (hasFetched && !force) { setLoading(false); return }
+    if (hasFetchedRef.current && !force) { setLoading(false); return }
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
+    try {
 
     const { data: portfolios } = await supabase
       .from('portfolios').select('id').eq('user_id', user.id)
@@ -73,6 +86,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       }
       setAssets([])
       setLoading(false)
+      hasFetchedRef.current = true
       setHasFetched(true)
       return
     }
@@ -96,36 +110,45 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const loaded: Asset[] = assetsData || []
     setAssets(loaded)
     setLoading(false)
+    hasFetchedRef.current = true
     setHasFetched(true)
 
     if (loaded.length > 0) {
       setPricesLoading(true)
-      const fetched = await fetchAllPrices(loaded)
-      setPrices(fetched)
-      setLastUpdated(new Date())
+      try {
+        const fetched = await fetchAllPrices(loaded)
+        setPrices(fetched)
+        setLastUpdated(new Date())
 
-      const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
+        const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
 
-      // Snapshot İzolasyonu: Sadece kullanıcının kendi şahsi portföyüne ait varlıklar snapshot'a yazılır
-      const personalAssets = loaded.filter(a => a.portfolio_id === portfolios[0].id)
+        // Snapshot İzolasyonu: Sadece kullanıcının kendi şahsi portföyüne ait varlıklar snapshot'a yazılır
+        const personalAssets = loaded.filter(a => a.portfolio_id === portfolios[0].id)
 
-      const tv = personalAssets.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
-      const tc = personalAssets.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
-      
-      const performanceValue = personalAssets.reduce((sum, a) => {
-        if (!isPerformanceAsset(a)) return sum
-        return sum + getCurrentValue(a, fetched, usdtry)
-      }, 0)
-      
-      const performanceCost = personalAssets.reduce((sum, a) => {
-        if (!isPerformanceAsset(a)) return sum
-        return sum + getCostValue(a, usdtry)
-      }, 0)
-      
-      await saveSnapshot(portfolios[0].id, tv, tc, performanceValue, performanceCost)
-      setPricesLoading(false)
+        const tv = personalAssets.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
+        const tc = personalAssets.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
+        
+        const performanceValue = personalAssets.reduce((sum, a) => {
+          if (!isPerformanceAsset(a)) return sum
+          return sum + getCurrentValue(a, fetched, usdtry)
+        }, 0)
+        
+        const performanceCost = personalAssets.reduce((sum, a) => {
+          if (!isPerformanceAsset(a)) return sum
+          return sum + getCostValue(a, usdtry)
+        }, 0)
+        
+        await saveSnapshot(portfolios[0].id, tv, tc, performanceValue, performanceCost)
+      } catch (priceErr) {
+        console.error('Error fetching prices or saving snapshot:', priceErr)
+      } finally {
+        setPricesLoading(false)
+      }
     }
-  }, [user, hasFetched])
+  } finally {
+    isFetchingRef.current = false
+  }
+}, [user])
 
   return (
     <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, resetPortfolio, isHidden, setIsHidden }}>

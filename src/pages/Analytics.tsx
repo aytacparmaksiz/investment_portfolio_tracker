@@ -35,11 +35,14 @@ const Analytics = () => {
     usd: { date: string; price: number }[];
     liveQqqm: number;
   }>({ qqqm: [], usd: [], liveQqqm: 304.12 })
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true)
 
   useEffect(() => { 
-    refresh()
-    fetchExtra() 
-  }, [])
+    if (user?.id) {
+      refresh()
+      fetchExtra() 
+    }
+  }, [user?.id])
 
   useEffect(() => { 
     if (portfolioId) loadSnapshots(portfolioId, range) 
@@ -68,6 +71,7 @@ const Analytics = () => {
 
     if (portfolios?.length) {
       const pid = portfolios[0].id
+      loadSnapshots(pid, range)
 
       // 1. En eski snapshot tarihini al (portföy başlangıç tarihi için)
       const { data: snapData } = await supabase
@@ -75,7 +79,6 @@ const Analytics = () => {
         .select('snapshot_date, performance_cost')
         .eq('portfolio_id', pid)
         .order('snapshot_date', { ascending: true })
-        .order('created_at', { ascending: true })
         .limit(1)
 
       if (snapData?.length) {
@@ -94,7 +97,6 @@ const Analytics = () => {
         .not('performance_cost', 'is', null)
         .gt('performance_cost', 0)
         .order('snapshot_date', { ascending: true })
-        .order('created_at', { ascending: true })
         .limit(1)
 
       if (perfSnap?.length && Number(perfSnap[0].performance_cost) > 0) {
@@ -104,26 +106,37 @@ const Analytics = () => {
   }
 
   const loadSnapshots = async (pid: string, days: number) => {
-    const data = await fetchSnapshots(pid, days)
-    setSnapshots(data)
+    setSnapshotsLoading(true)
+    try {
+      const data = await fetchSnapshots(pid, days)
+      setSnapshots(data)
 
-    const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
-    const fromDate = (data.length > 1 && data[0].snapshot_date < defaultRangeDate)
-      ? data[0].snapshot_date
-      : (firstTxDate && firstTxDate < defaultRangeDate ? firstTxDate : defaultRangeDate)
+      const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
+      const fromDate = (data.length > 1 && data[0].snapshot_date < defaultRangeDate)
+        ? data[0].snapshot_date
+        : (firstTxDate && firstTxDate < defaultRangeDate ? firstTxDate : defaultRangeDate)
 
-    // QQQM ve USDTRY geçmiş fiyatlarını ve anlık QQQM fiyatını paralel çek
-    const [qqqmData, usdData, liveQqqmData] = await Promise.all([
-      fetchHistoricalPrices('QQQM', fromDate),
-      fetchHistoricalPrices('USDTRY=X', fromDate),
-      fetchPrice('QQQM')
-    ])
+      // QQQM ve USDTRY geçmiş fiyatlarını ve anlık QQQM fiyatını paralel çek
+      try {
+        const [qqqmData, usdData, liveQqqmData] = await Promise.all([
+          fetchHistoricalPrices('QQQM', fromDate),
+          fetchHistoricalPrices('USDTRY=X', fromDate),
+          fetchPrice('QQQM')
+        ])
 
-    setBenchmarkPrices({
-      qqqm: qqqmData,
-      usd: usdData,
-      liveQqqm: liveQqqmData || 304.12
-    })
+        setBenchmarkPrices({
+          qqqm: qqqmData,
+          usd: usdData,
+          liveQqqm: liveQqqmData || 304.12
+        })
+      } catch (benchErr) {
+        console.warn('Error fetching benchmark prices:', benchErr)
+      }
+    } catch (snapErr) {
+      console.error('Error loading snapshots:', snapErr)
+    } finally {
+      setSnapshotsLoading(false)
+    }
   }
 
   const fc = (val: number) => {
@@ -420,7 +433,20 @@ const Analytics = () => {
       {/* Performans Sekmesi */}
       {activeTab === 'performans' && (
         <>
-          {chartData.length < 1 ? (
+          {(snapshotsLoading || (loading && chartData.length < 1)) ? (
+            <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                border: '3px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderRadius: '50%',
+                margin: '0 auto 12px',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Performans verileri yükleniyor...</p>
+            </div>
+          ) : chartData.length < 1 ? (
             <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
               <p style={{ fontSize: '40px', marginBottom: '12px' }}>📊</p>
               <p style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>Henüz yeterli veri yok</p>
