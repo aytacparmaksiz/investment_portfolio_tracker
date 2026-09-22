@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { FALLBACK_USD_RATE } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
-import { fetchSnapshots } from '../lib/snapshot'
+import { fetchSnapshots, saveSnapshot } from '../lib/snapshot'
 import { calculateComparison, fetchHistoricalPrices } from '../lib/comparison'
 import { fetchPrice } from '../lib/prices'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
@@ -66,18 +66,24 @@ const Analytics = () => {
 
   const fetchExtra = async () => {
     if (!user) return
-    const { data: portfolios } = await supabase
-      .from('portfolios').select('id').eq('user_id', user.id)
+    const { data: userPortfolios } = await supabase
+      .from('portfolios').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: true })
+    const { data: memberPortfolios } = await supabase
+      .from('portfolio_members').select('portfolio_id').eq('user_id', user.id)
 
-    if (portfolios?.length) {
-      const pid = portfolios[0].id
-      loadSnapshots(pid, range)
+    const allPids = [
+      ...(userPortfolios?.map((p: any) => p.id) || []),
+      ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
+    ]
+
+    if (allPids.length > 0) {
+      loadSnapshots(allPids, range)
 
       // 1. En eski snapshot tarihini al (portföy başlangıç tarihi için)
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
         .select('snapshot_date, performance_cost')
-        .eq('portfolio_id', pid)
+        .in('portfolio_id', allPids)
         .order('snapshot_date', { ascending: true })
         .limit(1)
 
@@ -93,7 +99,7 @@ const Analytics = () => {
       const { data: perfSnap } = await supabase
         .from('portfolio_snapshots')
         .select('performance_cost')
-        .eq('portfolio_id', pid)
+        .in('portfolio_id', allPids)
         .not('performance_cost', 'is', null)
         .gt('performance_cost', 0)
         .order('snapshot_date', { ascending: true })
@@ -105,10 +111,10 @@ const Analytics = () => {
     }
   }
 
-  const loadSnapshots = async (pid: string, days: number) => {
+  const loadSnapshots = async (pidOrPids: string | string[], days: number) => {
     setSnapshotsLoading(true)
     try {
-      const data = await fetchSnapshots(pid, days)
+      const data = await fetchSnapshots(pidOrPids, days)
       setSnapshots(data)
 
       const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
@@ -138,6 +144,32 @@ const Analytics = () => {
       setSnapshotsLoading(false)
     }
   }
+
+  // Otomatik snapshot garantisi: Eğer veritabanında henüz snapshot yoksa fakat kullanıcının aktif varlıkları varsa,
+  // kullanıcının boş ekranda kalmaması için bugünün snapshot'ını otomatik oluştur ve grafiği başlat
+  const autoSnapshotSavedRef = useRef(false)
+  useEffect(() => {
+    if (
+      !snapshotsLoading &&
+      snapshots.length === 0 &&
+      assets.length > 0 &&
+      portfolioId &&
+      !autoSnapshotSavedRef.current
+    ) {
+      autoSnapshotSavedRef.current = true
+      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      const tv = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
+      const tc = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+      const pv = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
+      const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
+
+      if (tv > 0 || tc > 0) {
+        saveSnapshot(portfolioId, tv, tc, pv, pc).then(() => {
+          loadSnapshots(portfolioId, range)
+        })
+      }
+    }
+  }, [snapshotsLoading, snapshots.length, assets, portfolioId, prices, range])
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
@@ -450,9 +482,32 @@ const Analytics = () => {
             <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
               <p style={{ fontSize: '40px', marginBottom: '12px' }}>📊</p>
               <p style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>Henüz yeterli veri yok</p>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5' }}>
-                Grafik oluşması için ana sayfadan fiyatları yenileyerek portföy snapshot'ı kaydetmeniz gerekiyor.
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5', marginBottom: '16px' }}>
+                Grafik oluşması için portföy snapshot verisi kaydedilmesi gerekiyor.
               </p>
+              <button
+                onClick={async () => {
+                  setSnapshotsLoading(true)
+                  await refresh(true)
+                  if (portfolioId) await loadSnapshots(portfolioId, range)
+                  setSnapshotsLoading(false)
+                }}
+                disabled={snapshotsLoading}
+                style={{
+                  padding: '12px 24px',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  borderRadius: '12px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow)',
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                🔄 Verileri Yenile & Grafiği Başlat
+              </button>
             </div>
           ) : (
             <>

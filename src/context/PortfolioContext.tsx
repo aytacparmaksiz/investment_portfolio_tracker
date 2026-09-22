@@ -72,7 +72,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     try {
 
     const { data: portfolios } = await supabase
-      .from('portfolios').select('id').eq('user_id', user.id)
+      .from('portfolios').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: true })
 
     if (!portfolios?.length) {
       const { data: newP } = await supabase
@@ -91,13 +91,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       return
     }
 
-    setPortfolioId(portfolios[0].id)
-
     const { data: memberPortfolios } = await supabase
       .from('portfolio_members').select('portfolio_id').eq('user_id', user.id)
 
+    const userPortfolioIds = portfolios.map((p: any) => p.id)
     const allPortfolioIds = [
-      portfolios[0].id,
+      ...userPortfolioIds,
       ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
     ]
 
@@ -113,6 +112,10 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     hasFetchedRef.current = true
     setHasFetched(true)
 
+    // Kullanıcının varlıklarını barındıran asıl portföyü seç
+    const activePortfolio = portfolios.find(p => loaded.some(a => a.portfolio_id === p.id)) || portfolios[0]
+    setPortfolioId(activePortfolio.id)
+
     if (loaded.length > 0) {
       setPricesLoading(true)
       try {
@@ -122,8 +125,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
         const usdtry = fetched['USDTRY=X'] || FALLBACK_USD_RATE
 
-        // Snapshot İzolasyonu: Sadece kullanıcının kendi şahsi portföyüne ait varlıklar snapshot'a yazılır
-        const personalAssets = loaded.filter(a => a.portfolio_id === portfolios[0].id)
+        // Snapshot İzolasyonu: Sadece kullanıcının kendi portföy varlıkları snapshot'a yazılır
+        const personalAssets = loaded.filter(a => userPortfolioIds.includes(a.portfolio_id))
 
         const tv = personalAssets.reduce((sum, a) => sum + getCurrentValue(a, fetched, usdtry), 0)
         const tc = personalAssets.reduce((sum, a) => sum + getCostValue(a, usdtry), 0)
@@ -138,7 +141,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           return sum + getCostValue(a, usdtry)
         }, 0)
         
-        await saveSnapshot(portfolios[0].id, tv, tc, performanceValue, performanceCost)
+        await saveSnapshot(activePortfolio.id, tv, tc, performanceValue, performanceCost)
       } catch (priceErr) {
         console.error('Error fetching prices or saving snapshot:', priceErr)
       } finally {
