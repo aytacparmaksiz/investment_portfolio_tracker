@@ -67,16 +67,38 @@ const Analytics = () => {
       .from('portfolios').select('id').eq('user_id', user.id)
 
     if (portfolios?.length) {
+      const pid = portfolios[0].id
+
+      // 1. En eski snapshot tarihini al (portföy başlangıç tarihi için)
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
-        .select('total_cost, performance_cost, snapshot_date')
-        .eq('portfolio_id', portfolios[0].id)
+        .select('snapshot_date, performance_cost')
+        .eq('portfolio_id', pid)
         .order('snapshot_date', { ascending: true })
+        .order('created_at', { ascending: true })
         .limit(1)
 
       if (snapData?.length) {
-        setTotalCost(Number(snapData[0].performance_cost || snapData[0].total_cost || 0))
         setFirstTxDate(snapData[0].snapshot_date)
+        if (snapData[0].performance_cost != null && Number(snapData[0].performance_cost) > 0) {
+          setTotalCost(Number(snapData[0].performance_cost))
+          return
+        }
+      }
+
+      // 2. İlk snapshot'ta performance_cost NULL ise, BES hariç ilk geçerli performance_cost kaydını bul
+      const { data: perfSnap } = await supabase
+        .from('portfolio_snapshots')
+        .select('performance_cost')
+        .eq('portfolio_id', pid)
+        .not('performance_cost', 'is', null)
+        .gt('performance_cost', 0)
+        .order('snapshot_date', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      if (perfSnap?.length && Number(perfSnap[0].performance_cost) > 0) {
+        setTotalCost(Number(perfSnap[0].performance_cost))
       }
     }
   }
@@ -119,10 +141,9 @@ const Analytics = () => {
   }, [assets, firstTxDate])
 
   const currentActiveCost = useMemo(() => {
-    if (totalCost > 0) return totalCost
     const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
     return assets.filter(isPerformanceAsset).reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
-  }, [totalCost, assets, prices])
+  }, [assets, prices])
 
   // --- GRAFİK VE QQQM BENCHMARK HESAPLAMASI ---
   const { chartData, benchmarkSummary } = useMemo(() => {

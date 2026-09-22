@@ -4,6 +4,7 @@ export interface SnapshotRecord {
   total_cost: number;
   performance_value?: number | null;
   performance_cost?: number | null;
+  created_at?: string;
 }
 
 export interface BenchmarkChartPoint {
@@ -58,6 +59,48 @@ export function findClosestPrice(
   return chosen > 0 ? chosen : (livePrice && livePrice > 0 ? livePrice : 0);
 }
 
+export function deduplicateSnapshots<T extends { snapshot_date: string; performance_value?: number | null; performance_cost?: number | null; created_at?: string }>(
+  data: T[]
+): T[] {
+  const dateMap = new Map<string, T>();
+
+  const toTime = (dateStr?: string) => {
+    if (!dateStr) return 0;
+    const t = new Date(dateStr).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  for (const snap of data) {
+    if (!snap || !snap.snapshot_date) continue;
+
+    const existing = dateMap.get(snap.snapshot_date);
+    if (!existing) {
+      dateMap.set(snap.snapshot_date, snap);
+      continue;
+    }
+
+    const existingHasPerf = (existing.performance_value != null && Number(existing.performance_value) > 0) ||
+                            (existing.performance_cost != null && Number(existing.performance_cost) > 0);
+    const currentHasPerf = (snap.performance_value != null && Number(snap.performance_value) > 0) ||
+                           (snap.performance_cost != null && Number(snap.performance_cost) > 0);
+
+    if (currentHasPerf && !existingHasPerf) {
+      dateMap.set(snap.snapshot_date, snap);
+    } else if (!currentHasPerf && existingHasPerf) {
+      // Keep existing record with valid performance data
+    } else {
+      // Both have or both lack performance data: prefer latest created_at
+      const existingTime = toTime(existing.created_at);
+      const currentTime = toTime(snap.created_at);
+      if (currentTime >= existingTime) {
+        dateMap.set(snap.snapshot_date, snap);
+      }
+    }
+  }
+
+  return Array.from(dateMap.values()).sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+}
+
 export function buildBenchmarkSeries(
   snapshots: SnapshotRecord[],
   qqqmHistory: { date: string; price: number }[],
@@ -71,10 +114,8 @@ export function buildBenchmarkSeries(
     return { points: [], summary: null };
   }
 
-  // Filter and sort snapshots ascending
-  const sortedSnaps = [...snapshots]
-    .filter(s => s && s.snapshot_date)
-    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  // 1. Deduplicate incoming snapshots by snapshot_date (preferring records with valid performance data and latest created_at)
+  const sortedSnaps = deduplicateSnapshots(snapshots);
 
   if (sortedSnaps.length === 0) {
     return { points: [], summary: null };
@@ -85,6 +126,34 @@ export function buildBenchmarkSeries(
     return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })}`;
   };
 
+  // 2. Normalize historical snapshots that lack performance_value
+  // Find first snapshot with a valid performance_value (> 0)
+  const firstValid = sortedSnaps.find(
+    s => s.performance_value != null && Number(s.performance_value) > 0
+  );
+
+  let activeRatio = 1;
+  let costRatio = 1;
+
+  if (firstValid) {
+    const fvTotalV = Number(firstValid.total_value || 0);
+    const fvPerfV = Number(firstValid.performance_value || 0);
+    if (fvTotalV > 0 && fvPerfV > 0) {
+      activeRatio = Math.min(1, Math.max(0, fvPerfV / fvTotalV));
+    }
+
+    const fvTotalC = Number(firstValid.total_cost || 0);
+    const fvPerfC = firstValid.performance_cost != null && Number(firstValid.performance_cost) > 0
+      ? Number(firstValid.performance_cost)
+      : fvTotalC * activeRatio;
+
+    if (fvTotalC > 0 && fvPerfC > 0) {
+      costRatio = Math.min(1, Math.max(0, fvPerfC / fvTotalC));
+    } else {
+      costRatio = activeRatio;
+    }
+  }
+
   // If only 1 snapshot and we have an earlier initial date, synthesize a start point
   let effectiveSnaps: {
     snapshot_date: string;
@@ -92,22 +161,40 @@ export function buildBenchmarkSeries(
     total_cost: number;
     performance_value: number;
     performance_cost: number;
+    isEstimated: boolean;
+    isSynthetic?: boolean;
   }[] = sortedSnaps.map(s => {
     const totalV = Number(s.total_value || 0);
     const totalC = Number(s.total_cost || 0);
-    const activeV = s.performance_value != null && Number(s.performance_value) > 0
-      ? Number(s.performance_value)
-      : totalV;
-    const activeC = s.performance_cost != null && Number(s.performance_cost) > 0
-      ? Number(s.performance_cost)
-      : totalC;
+    const hasPerfV = s.performance_value != null;
+    const hasPerfC = s.performance_cost != null;
+
+    let activeV: number;
+    let activeC: number;
+    let isEstimated = false;
+
+    if (hasPerfV) {
+      activeV = Number(s.performance_value);
+      activeC = hasPerfC ? Number(s.performance_cost) : Math.round(totalC * costRatio);
+    } else {
+      if (firstValid) {
+        activeV = Math.round(totalV * activeRatio);
+        activeC = Math.round(totalC * costRatio);
+        isEstimated = true;
+      } else {
+        activeV = totalV;
+        activeC = totalC;
+        isEstimated = false;
+      }
+    }
 
     return {
       snapshot_date: s.snapshot_date,
       total_value: totalV,
       total_cost: totalC,
       performance_value: activeV,
-      performance_cost: activeC
+      performance_cost: activeC,
+      isEstimated
     };
   });
 
@@ -124,7 +211,9 @@ export function buildBenchmarkSeries(
         total_value: initialCost,
         total_cost: initialCost,
         performance_value: initialCost,
-        performance_cost: initialCost
+        performance_cost: initialCost,
+        isEstimated: true,
+        isSynthetic: true
       },
       ...effectiveSnaps
     ];
@@ -162,25 +251,36 @@ export function buildBenchmarkSeries(
       }
       qqqmVal = activeV;
     } else {
-      // Recover runningShares if day 0 had no valid price
+      // Recover runningShares if day 0 had no valid price or 0 capital
       if (runningShares === 0 && qqqmPriceTRY > 0) {
         const baseForShares = activeV > 0 ? activeV : (activeC > 0 ? activeC : 0);
         if (baseForShares > 0) {
           runningShares = baseForShares / qqqmPriceTRY;
+          runningInvested = activeC > 0 ? activeC : baseForShares;
         }
-      }
+      } else {
+        const costDelta = activeC - previousActiveCost;
+        const prevSnap = effectiveSnaps[idx - 1];
+        const isTransitionFromEstimated =
+          (prevSnap && prevSnap.isEstimated && !s.isEstimated) || Boolean(prevSnap?.isSynthetic);
 
-      const costDelta = activeC - previousActiveCost;
-      if (costDelta > 0 && qqqmPriceTRY > 0) {
-        // Additional capital added -> buy more QQQM shares
-        const newShares = costDelta / qqqmPriceTRY;
-        runningShares += newShares;
-        runningInvested += costDelta;
-      } else if (costDelta < 0 && previousActiveCost > 0) {
-        // Capital withdrawn -> proportional share redemption
-        const withdrawRatio = Math.min(1, Math.abs(costDelta) / previousActiveCost);
-        runningShares = Math.max(0, runningShares * (1 - withdrawRatio));
-        runningInvested += costDelta;
+        if (costDelta > 0 && qqqmPriceTRY > 0) {
+          // Additional capital added -> buy more QQQM shares
+          const newShares = costDelta / qqqmPriceTRY;
+          runningShares += newShares;
+          runningInvested += costDelta;
+        } else if (costDelta < 0 && previousActiveCost > 0) {
+          if (!isTransitionFromEstimated) {
+            // Capital withdrawn -> proportional share redemption
+            const withdrawRatio = Math.min(1, Math.abs(costDelta) / previousActiveCost);
+            runningShares = Math.max(0, runningShares * (1 - withdrawRatio));
+            runningInvested += costDelta;
+          } else {
+            // Transition from estimated to first real snapshot or from synthetic point:
+            // Do not trigger cash withdrawal / share redemption on negative costDelta
+            runningInvested = activeC;
+          }
+        }
       }
       previousActiveCost = activeC;
       qqqmVal = runningShares * qqqmPriceTRY;
