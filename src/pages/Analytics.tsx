@@ -13,7 +13,7 @@ import { useLocation } from 'react-router-dom'
 
 const Analytics = () => {
   const { user } = useAuth()
-  const { assets, prices, portfolioId, refresh, isHidden } = usePortfolio()
+  const { assets, prices, loading, portfolioId, refresh, isHidden } = usePortfolio()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
   
