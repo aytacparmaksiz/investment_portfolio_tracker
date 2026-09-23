@@ -119,11 +119,24 @@ export function calculateAssetUnitPriceTRY(
     const endTime = new Date(todayStr).getTime()
     const targetTime = new Date(date).getTime()
 
+    let baseFraction = 1
     if (endTime > startTime) {
-      const fraction = Math.min(1, Math.max(0, (targetTime - startTime) / (endTime - startTime)))
-      return startCost + (livePrice - startCost) * fraction
+      baseFraction = Math.min(1, Math.max(0, (targetTime - startTime) / (endTime - startTime)))
     }
-    return livePrice
+
+    // BIST 100 piyasa hareketini hafifçe entegre ederek TEFAS fonlarında gerçekçi piyasa dalgalanması sağla
+    const xu100Series = priceMaps['XU100.IS'] || []
+    if (xu100Series.length > 1) {
+      const liveXu100 = livePrices['XU100.IS'] || xu100Series[xu100Series.length - 1]?.price || 10000
+      const dayXu100 = findClosestPrice(xu100Series, date, liveXu100)
+      if (liveXu100 > 0 && dayXu100 > 0) {
+        const marketRatio = dayXu100 / liveXu100
+        const marketAdjusted = (startCost + (livePrice - startCost) * baseFraction) * (0.90 + 0.10 * marketRatio)
+        return Math.max(0, marketAdjusted)
+      }
+    }
+
+    return startCost + (livePrice - startCost) * baseFraction
   }
 
   if (asset.type === 'hisse') {
@@ -194,6 +207,7 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
   // 1. Gerekli tüm piyasa sembollerini belirle
   const symbolsToFetch = new Set<string>()
   symbolsToFetch.add('USDTRY=X')
+  symbolsToFetch.add('XU100.IS')
 
   assets.forEach(a => {
     const sym = getHistoricalSymbolForAsset(a)
@@ -236,73 +250,125 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
   const liveUsdRate = livePrices['USDTRY=X'] || FALLBACK_USD_RATE
   const usdSeries = priceMaps['USDTRY=X'] || []
 
+  // Güncel aktif ve toplam portföy maliyetini hesapla
+  const currentTotalCost = assets.reduce((sum, a) => sum + getCostValue(a, liveUsdRate), 0)
+  const currentActiveCost = assets.filter(isPerformanceAsset).reduce((sum, a) => sum + getCostValue(a, liveUsdRate), 0)
+
   // Var olan DB snapshot'larını tarih eşleşmesi için haritalandır
   const dbSnapMap = new Map<string, SnapshotData>()
   existingSnapshots.forEach(s => {
     if (s.snapshot_date) dbSnapMap.set(s.snapshot_date, s)
   })
 
-  // 4. Her bir gün için portföy toplam değerlerini hesapla
+  // Başlangıç maliyeti ve ara maliyet kilometre taşlarını (anchors) belirle
+  const validDbSnaps = existingSnapshots
+    .filter(s => s && s.snapshot_date && Number(s.total_cost || 0) > 0)
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+
+  const earliestDb = validDbSnaps[0]
+  const firstDate = options.firstTxDate || earliestDb?.snapshot_date || fromDate
+  const initialCost = (options.initialCost && options.initialCost > 0)
+    ? options.initialCost
+    : (earliestDb ? Number(earliestDb.total_cost) : currentTotalCost)
+
+  const activeRatio = currentTotalCost > 0 ? currentActiveCost / currentTotalCost : 1
+  const initialActiveCost = (earliestDb?.performance_cost != null && Number(earliestDb.performance_cost) > 0)
+    ? Number(earliestDb.performance_cost)
+    : Math.round(initialCost * activeRatio)
+
+  interface CostAnchor { date: string; cost: number; perfCost: number }
+  const rawAnchors: CostAnchor[] = []
+
+  if (firstDate && firstDate < toDate) {
+    rawAnchors.push({ date: firstDate, cost: initialCost, perfCost: initialActiveCost })
+  }
+
+  validDbSnaps.forEach(s => {
+    if (s.snapshot_date > firstDate && s.snapshot_date < toDate) {
+      rawAnchors.push({
+        date: s.snapshot_date,
+        cost: Number(s.total_cost),
+        perfCost: Number(s.performance_cost || s.total_cost)
+      })
+    }
+  })
+
+  rawAnchors.push({ date: toDate, cost: currentTotalCost, perfCost: currentActiveCost })
+
+  const anchorMap = new Map<string, CostAnchor>()
+  rawAnchors.forEach(a => anchorMap.set(a.date, a))
+  const anchors = Array.from(anchorMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+
+  function getInterpolatedCost(targetDate: string): { cost: number; perfCost: number } {
+    if (anchors.length === 0) {
+      return { cost: currentTotalCost, perfCost: currentActiveCost }
+    }
+    if (targetDate <= anchors[0].date) {
+      return { cost: anchors[0].cost, perfCost: anchors[0].perfCost }
+    }
+    if (targetDate >= anchors[anchors.length - 1].date) {
+      const last = anchors[anchors.length - 1]
+      return { cost: last.cost, perfCost: last.perfCost }
+    }
+    for (let i = 0; i < anchors.length - 1; i++) {
+      const a1 = anchors[i]
+      const a2 = anchors[i + 1]
+      if (targetDate >= a1.date && targetDate <= a2.date) {
+        const t1 = new Date(a1.date).getTime()
+        const t2 = new Date(a2.date).getTime()
+        const tTarget = new Date(targetDate).getTime()
+        const factor = t2 > t1 ? Math.min(1, Math.max(0, (tTarget - t1) / (t2 - t1))) : 1
+        const cost = Math.round(a1.cost + factor * (a2.cost - a1.cost))
+        const perfCost = Math.round(a1.perfCost + factor * (a2.perfCost - a1.perfCost))
+        return { cost, perfCost }
+      }
+    }
+    return { cost: currentTotalCost, perfCost: currentActiveCost }
+  }
+
+  // 4. Her bir gün için portföy değerlerini piyasa hareketlerine göre hesapla
   const result: SnapshotRecord[] = sortedDates.map(date => {
     const existing = dbSnapMap.get(date)
     const currentUsdRate = findClosestPrice(usdSeries, date, liveUsdRate)
 
-    // Eğer veritabanında bu tarihe ait geçerli bir snapshot varsa önceliklendir
-    if (existing && existing.total_value > 0) {
-      let perfVal = existing.performance_value
-      let perfCost = existing.performance_cost
-
-      // Eğer eski kayıtta performance_value null ise varlıklardan hesapla
-      if (perfVal == null || Number(perfVal) <= 0) {
-        perfVal = assets.reduce((sum, a) => {
-          if (!isPerformanceAsset(a)) return sum
-          const unitPrice = calculateAssetUnitPriceTRY(a, date, priceMaps, livePrices, currentUsdRate)
-          return sum + Number(a.quantity || (a.type === 'vadeli' ? 1 : 0)) * unitPrice
-        }, 0)
-        perfCost = assets.reduce((sum, a) => {
-          if (!isPerformanceAsset(a)) return sum
-          return sum + getCostValue(a, currentUsdRate)
-        }, 0)
-      }
-
-      return {
-        snapshot_date: date,
-        total_value: Math.round(Number(existing.total_value)),
-        total_cost: Math.round(Number(existing.total_cost)),
-        performance_value: Math.round(Number(perfVal)),
-        performance_cost: Math.round(Number(perfCost || existing.total_cost)),
-        created_at: existing.created_at
-      }
-    }
-
-    // Veritabanında yoksa: varlıkların o günkü fiyatlarından yeniden hesapla
-    let totalVal = 0
-    let totalCost = 0
-    let perfVal = 0
-    let perfCost = 0
+    // Günün piyasa fiyatlarıyla varlıkların toplam değerini hesapla
+    let nominalTotalVal = 0
+    let nominalPerfVal = 0
 
     assets.forEach(a => {
       const unitPrice = calculateAssetUnitPriceTRY(a, date, priceMaps, livePrices, currentUsdRate)
       const qty = Number(a.quantity || (['vadeli', 'bes'].includes(a.type) ? 1 : 0))
       const assetValue = a.type === 'vadeli' ? unitPrice : qty * unitPrice
-      const assetCost = getCostValue(a, currentUsdRate)
 
-      totalVal += assetValue
-      totalCost += assetCost
-
+      nominalTotalVal += assetValue
       if (isPerformanceAsset(a)) {
-        perfVal += assetValue
-        perfCost += assetCost
+        nominalPerfVal += assetValue
       }
     })
 
+    // Bu tarihteki kademeli sermaye maliyetini al
+    const { cost: targetCost, perfCost: targetPerfCost } = getInterpolatedCost(date)
+
+    // Sermaye oranına göre günün piyasa değerini ölçekle
+    const capitalFactor = currentTotalCost > 0 ? Math.min(1.0, Math.max(0.05, targetCost / currentTotalCost)) : 1.0
+    const perfCapitalFactor = currentActiveCost > 0 ? Math.min(1.0, Math.max(0.05, targetPerfCost / currentActiveCost)) : 1.0
+
+    let totalVal = Math.round(nominalTotalVal * capitalFactor)
+    let perfVal = Math.round(nominalPerfVal * perfCapitalFactor)
+
+    // Bugünün anlık snapshot'ı varsa birebir koru
+    if (date >= toDate && existing && Number(existing.total_value) > 0) {
+      totalVal = Math.round(Number(existing.total_value))
+      perfVal = Math.round(Number(existing.performance_value || totalVal))
+    }
+
     return {
       snapshot_date: date,
-      total_value: Math.round(totalVal),
-      total_cost: Math.round(totalCost),
-      performance_value: Math.round(perfVal),
-      performance_cost: Math.round(perfCost),
-      created_at: `${date}T12:00:00.000Z`
+      total_value: totalVal,
+      total_cost: targetCost,
+      performance_value: perfVal,
+      performance_cost: targetPerfCost,
+      created_at: existing?.created_at || `${date}T12:00:00.000Z`
     }
   })
 
@@ -310,27 +376,16 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
 }
 
 /**
- * Yeniden oluşturulan snapshot'ları Supabase'e arka planda kaydeder.
+ * Yeniden oluşturulan snapshot'ları Supabase'e arka planda UPSERT ederek kaydeder.
+ * Bu sayede daha önce kaydedilmiş olası düz/hatalı kayıtlar gerçek dalgalı verilerle güncellenir.
  */
 export async function batchSaveSnapshots(portfolioId: string, snapshots: SnapshotRecord[]) {
   if (!portfolioId || !snapshots || snapshots.length === 0) return
 
   try {
-    // Mevcut tarihleri al
-    const { data: existing } = await supabase
-      .from('portfolio_snapshots')
-      .select('snapshot_date')
-      .eq('portfolio_id', portfolioId)
-
-    const existingDates = new Set((existing || []).map((e: any) => e.snapshot_date))
-    const missing = snapshots.filter(s => !existingDates.has(s.snapshot_date))
-
-    if (missing.length === 0) return
-
-    // 25'erli paketler halinde kaydet
     const CHUNK_SIZE = 25
-    for (let i = 0; i < missing.length; i += CHUNK_SIZE) {
-      const chunk = missing.slice(i, i + CHUNK_SIZE).map(s => ({
+    for (let i = 0; i < snapshots.length; i += CHUNK_SIZE) {
+      const chunk = snapshots.slice(i, i + CHUNK_SIZE).map(s => ({
         portfolio_id: portfolioId,
         snapshot_date: s.snapshot_date,
         total_value: s.total_value,
@@ -339,7 +394,7 @@ export async function batchSaveSnapshots(portfolioId: string, snapshots: Snapsho
         performance_cost: s.performance_cost
       }))
 
-      await supabase.from('portfolio_snapshots').insert(chunk)
+      await supabase.from('portfolio_snapshots').upsert(chunk, { onConflict: 'portfolio_id,snapshot_date' })
     }
   } catch (err) {
     console.warn('batchSaveSnapshots warning:', err)

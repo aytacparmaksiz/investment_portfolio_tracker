@@ -127,7 +127,10 @@ const Analytics = () => {
       const todayStr = new Date().toISOString().split('T')[0]
       const fromDate = defaultRangeDate
 
-      // Seyrek veri tespiti: Veritabanındaki snapshot sayısı çok azsa (< 5) veya günler arasında 4 günden büyük boşluk varsa,
+      // Seyrek veya düz veri tespiti:
+      // 1. Snapshot sayısı gün aralığına göre çok azsa (< 10 veya günlerin %70'inden azsa)
+      // 2. Günler arasında 4 günden büyük boşluk varsa
+      // 3. Veritabanındaki tüm snapshot değerleri birbiriyle tıpatıp aynıysa (düz çizgi hatası)
       // varlıkların gerçek piyasa hareketlerinden eksik günleri yeniden yapılandırarak günlük dalgalanmaları oluştur.
       let effectiveData = data
       const hasLargeGaps = data.some((s, idx) => {
@@ -136,7 +139,8 @@ const Analytics = () => {
         const currDate = new Date(s.snapshot_date).getTime()
         return (currDate - prevDate) > 4 * 86400000 // gap > 4 days
       })
-      const isSparse = data.length < Math.min(days, 5) || hasLargeGaps
+      const hasFlatData = data.length > 2 && data.slice(1).every(s => Number(s.total_value) === Number(data[0].total_value))
+      const isSparse = data.length < Math.min(days * 0.7, 10) || hasLargeGaps || hasFlatData
 
       if (isSparse && activeAssets.length > 0) {
         effectiveData = await reconstructPortfolioHistory({

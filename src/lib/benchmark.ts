@@ -207,7 +207,13 @@ export function buildBenchmarkSeries(
         .filter(s => s.snapshot_date < rangeFromDate)
         .sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date))[0];
       if (preceding && inRange[0].snapshot_date > rangeFromDate) {
-        effectiveSnaps = [preceding, ...inRange];
+        const daysBeforeRange = (new Date(rangeFromDate).getTime() - new Date(preceding.snapshot_date).getTime()) / 86400000;
+        // Yalnızca aralık başlangıcına yakın (hafta sonu vb. en fazla 7 gün öncesi) önceki kaydı dahil et
+        if (daysBeforeRange <= 7) {
+          effectiveSnaps = [preceding, ...inRange];
+        } else {
+          effectiveSnaps = inRange;
+        }
       } else {
         effectiveSnaps = inRange;
       }

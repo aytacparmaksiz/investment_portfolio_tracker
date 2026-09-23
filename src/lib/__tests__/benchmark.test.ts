@@ -218,4 +218,17 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   assert(res.points[0].rawDate === '2026-09-15', `Day 0 baseline date is range start 2026-09-15 NOT 2026-06-22 (got ${res.points[0].rawDate})`)
 }
 
+// 11. Test distant preceding snapshot (e.g. 60 days ago) is NOT prepended when user selects 30-day range:
+{
+  const snaps: SnapshotRecord[] = [
+    { snapshot_date: '2026-06-25', total_value: 439482, total_cost: 439482, performance_value: 439482, performance_cost: 439482 },
+    { snapshot_date: '2026-08-25', total_value: 1000000, total_cost: 900000, performance_value: 1000000, performance_cost: 900000 },
+    { snapshot_date: '2026-09-23', total_value: 1100000, total_cost: 1048593, performance_value: 1100000, performance_cost: 1048593 }
+  ]
+  // 30-day range starting 2026-08-24. Preceding is 2026-06-25 (60 days ago!).
+  const res = buildBenchmarkSeries(snaps, [], [], 100, 40, '2026-06-25', 439482, '2026-08-24')
+  assert(res.points.length === 2, `Distant preceding snapshot is omitted, points count is 2 (got ${res.points.length})`)
+  assert(res.points[0].rawDate === '2026-08-25', `First point is 2026-08-25 NOT 2026-06-25 (got ${res.points[0].rawDate})`)
+}
+
 console.log('\n--- ALL UNIT TESTS PASSED! ---')
