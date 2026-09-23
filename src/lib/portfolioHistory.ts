@@ -256,15 +256,11 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
       if (perfVal == null || Number(perfVal) <= 0) {
         perfVal = assets.reduce((sum, a) => {
           if (!isPerformanceAsset(a)) return sum
-          const assetDate = (a.start_date || a.created_at || '').split('T')[0]
-          if (assetDate > date) return sum
           const unitPrice = calculateAssetUnitPriceTRY(a, date, priceMaps, livePrices, currentUsdRate)
           return sum + Number(a.quantity || (a.type === 'vadeli' ? 1 : 0)) * unitPrice
         }, 0)
         perfCost = assets.reduce((sum, a) => {
           if (!isPerformanceAsset(a)) return sum
-          const assetDate = (a.start_date || a.created_at || '').split('T')[0]
-          if (assetDate > date) return sum
           return sum + getCostValue(a, currentUsdRate)
         }, 0)
       }
@@ -286,10 +282,6 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     let perfCost = 0
 
     assets.forEach(a => {
-      const assetDate = (a.start_date || a.created_at || '').split('T')[0]
-      // Varlık bu tarihten sonra alınmışsa o gün portföyde yoktur
-      if (assetDate && assetDate > date) return
-
       const unitPrice = calculateAssetUnitPriceTRY(a, date, priceMaps, livePrices, currentUsdRate)
       const qty = Number(a.quantity || (['vadeli', 'bes'].includes(a.type) ? 1 : 0))
       const assetValue = a.type === 'vadeli' ? unitPrice : qty * unitPrice

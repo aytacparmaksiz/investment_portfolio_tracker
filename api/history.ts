@@ -27,6 +27,7 @@ export default async function handler(req: any, res: any) {
     })
     const data = await response.json()
     const timestamps = data?.chart?.result?.[0]?.timestamp || []
+    const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []
     const regularMarketPrice = data?.chart?.result?.[0]?.meta?.regularMarketPrice
 
     const prices = timestamps.map((t: number, i: number) => {

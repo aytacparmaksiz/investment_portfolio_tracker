@@ -4,8 +4,8 @@ export async function fetchHistoricalPrices(symbol: string, from: string, interv
   const cleanSym = symbol.trim()
   const intervalParam = interval ? `&interval=${interval}` : ''
   const endpoints = [
-    `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`,
-    `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`
+    `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`,
+    `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`
   ]
 
   for (const url of endpoints) {

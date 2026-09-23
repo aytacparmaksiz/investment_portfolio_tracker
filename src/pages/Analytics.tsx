@@ -49,9 +49,9 @@ const Analytics = () => {
   useEffect(() => { 
     const pids = allPortfolioIds.length > 0 ? allPortfolioIds : (portfolioId ? [portfolioId] : [])
     if (pids.length > 0) {
-      loadSnapshots(pids, range) 
+      loadSnapshots(pids, range, assets) 
     }
-  }, [range, portfolioId, allPortfolioIds])
+  }, [range, portfolioId, allPortfolioIds, assets])
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
@@ -117,7 +117,8 @@ const Analytics = () => {
     }
   }
 
-  const loadSnapshots = async (pidOrPids: string | string[], days: number) => {
+  const loadSnapshots = async (pidOrPids: string | string[], days: number, currentAssets?: any[]) => {
+    const activeAssets = currentAssets && currentAssets.length > 0 ? currentAssets : assets
     setSnapshotsLoading(true)
     try {
       const data = await fetchSnapshots(pidOrPids, days)
@@ -126,14 +127,20 @@ const Analytics = () => {
       const todayStr = new Date().toISOString().split('T')[0]
       const fromDate = defaultRangeDate
 
-      // Seyrek veri tespiti: Veritabanındaki snapshot sayısı çok azsa (< 5) veya günler arasında boşluk varsa,
+      // Seyrek veri tespiti: Veritabanındaki snapshot sayısı çok azsa (< 5) veya günler arasında 4 günden büyük boşluk varsa,
       // varlıkların gerçek piyasa hareketlerinden eksik günleri yeniden yapılandırarak günlük dalgalanmaları oluştur.
       let effectiveData = data
-      const isSparse = data.length < Math.min(days, 5)
+      const hasLargeGaps = data.some((s, idx) => {
+        if (idx === 0) return false
+        const prevDate = new Date(data[idx - 1].snapshot_date).getTime()
+        const currDate = new Date(s.snapshot_date).getTime()
+        return (currDate - prevDate) > 4 * 86400000 // gap > 4 days
+      })
+      const isSparse = data.length < Math.min(days, 5) || hasLargeGaps
 
-      if (isSparse && assets.length > 0) {
+      if (isSparse && activeAssets.length > 0) {
         effectiveData = await reconstructPortfolioHistory({
-          assets,
+          assets: activeAssets,
           livePrices: prices,
           existingSnapshots: data,
           fromDate,
