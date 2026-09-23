@@ -108,7 +108,8 @@ export function buildBenchmarkSeries(
   liveQqqmUSD: number,
   liveUsdRate: number,
   firstTxDate?: string,
-  initialCost?: number
+  initialCost?: number,
+  rangeFromDate?: string
 ): { points: BenchmarkChartPoint[]; summary: BenchmarkSummary | null } {
   if (!snapshots || snapshots.length === 0) {
     return { points: [], summary: null };
@@ -198,12 +199,33 @@ export function buildBenchmarkSeries(
     };
   });
 
+  if (rangeFromDate && effectiveSnaps.length > 1) {
+    const inRange = effectiveSnaps.filter(s => s.snapshot_date >= rangeFromDate);
+    if (inRange.length >= 1) {
+      // If the first in-range snapshot is after rangeFromDate, find the closest preceding snapshot to preserve starting baseline
+      const preceding = effectiveSnaps
+        .filter(s => s.snapshot_date < rangeFromDate)
+        .sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date))[0];
+      if (preceding && inRange[0].snapshot_date > rangeFromDate) {
+        effectiveSnaps = [preceding, ...inRange];
+      } else {
+        effectiveSnaps = inRange;
+      }
+    }
+  }
+
   if (effectiveSnaps.length === 1) {
     const single = effectiveSnaps[0];
     const baseCost = (initialCost && initialCost > 0) ? initialCost : (single.total_cost > 0 ? single.total_cost : single.total_value);
-    const baseDate = (firstTxDate && firstTxDate < single.snapshot_date)
-      ? firstTxDate
-      : new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
+    
+    let baseDate: string;
+    if (rangeFromDate && rangeFromDate < single.snapshot_date) {
+      baseDate = rangeFromDate;
+    } else if (firstTxDate && firstTxDate < single.snapshot_date) {
+      baseDate = firstTxDate;
+    } else {
+      baseDate = new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
+    }
 
     const perfBaseCost = (initialCost && initialCost > 0)
       ? initialCost

@@ -192,4 +192,30 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   assert(deduped[1].snapshot_date === '2026-09-17', 'Handles invalid created_at timestamp safely')
 }
 
+// 9. Test rangeFromDate parameter:
+{
+  const snaps: SnapshotRecord[] = [
+    { snapshot_date: '2026-06-22', total_value: 500000, total_cost: 500000, performance_value: 500000, performance_cost: 500000 },
+    { snapshot_date: '2026-08-20', total_value: 550000, total_cost: 500000, performance_value: 550000, performance_cost: 500000 },
+    { snapshot_date: '2026-09-01', total_value: 570000, total_cost: 500000, performance_value: 570000, performance_cost: 500000 },
+    { snapshot_date: '2026-09-22', total_value: 600000, total_cost: 500000, performance_value: 600000, performance_cost: 500000 }
+  ]
+  // With 30-day range starting from 2026-08-23:
+  const res = buildBenchmarkSeries(snaps, [], [], 100, 40, '2026-06-22', 500000, '2026-08-23')
+  // Should include preceding baseline (2026-08-20) plus in-range dates (2026-09-01, 2026-09-22)
+  assert(res.points.length === 3, `Filtered to range with baseline preserves correct points (got ${res.points.length})`)
+  assert(res.points[0].rawDate === '2026-08-20', `Starting point is closest preceding baseline (got ${res.points[0].rawDate})`)
+}
+
+// 10. Test single snapshot with rangeFromDate (MUST NOT STRETCH TO 3 MONTHS AGO):
+{
+  const single: SnapshotRecord[] = [
+    { snapshot_date: '2026-09-22', total_value: 600000, total_cost: 500000, performance_value: 600000, performance_cost: 500000 }
+  ]
+  // User selected 7G (7 days, from 2026-09-15)
+  const res = buildBenchmarkSeries(single, [], [], 100, 40, '2026-06-22', 500000, '2026-09-15')
+  assert(res.points.length === 2, `Single snap has 2 points (got ${res.points.length})`)
+  assert(res.points[0].rawDate === '2026-09-15', `Day 0 baseline date is range start 2026-09-15 NOT 2026-06-22 (got ${res.points[0].rawDate})`)
+}
+
 console.log('\n--- ALL UNIT TESTS PASSED! ---')

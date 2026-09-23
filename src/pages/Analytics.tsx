@@ -8,6 +8,7 @@ import { calculateComparison, fetchHistoricalPrices } from '../lib/comparison'
 import { fetchPrice } from '../lib/prices'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
 import { buildBenchmarkSeries } from '../lib/benchmark'
+import { reconstructPortfolioHistory, batchSaveSnapshots } from '../lib/portfolioHistory'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useLocation } from 'react-router-dom'
 
@@ -120,12 +121,35 @@ const Analytics = () => {
     setSnapshotsLoading(true)
     try {
       const data = await fetchSnapshots(pidOrPids, days)
-      setSnapshots(data)
-
+      
       const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
-      const fromDate = (data.length > 1 && data[0].snapshot_date < defaultRangeDate)
-        ? data[0].snapshot_date
-        : (firstTxDate && firstTxDate < defaultRangeDate ? firstTxDate : defaultRangeDate)
+      const todayStr = new Date().toISOString().split('T')[0]
+      const fromDate = defaultRangeDate
+
+      // Seyrek veri tespiti: Veritabanındaki snapshot sayısı çok azsa (< 5) veya günler arasında boşluk varsa,
+      // varlıkların gerçek piyasa hareketlerinden eksik günleri yeniden yapılandırarak günlük dalgalanmaları oluştur.
+      let effectiveData = data
+      const isSparse = data.length < Math.min(days, 5)
+
+      if (isSparse && assets.length > 0) {
+        effectiveData = await reconstructPortfolioHistory({
+          assets,
+          livePrices: prices,
+          existingSnapshots: data,
+          fromDate,
+          toDate: todayStr,
+          firstTxDate: firstTxDate || earliestActiveDate,
+          initialCost: totalCost || currentActiveCost
+        })
+
+        // Arka planda eksik kayıtları veritabanına kaydet
+        const targetPid = Array.isArray(pidOrPids) ? pidOrPids[0] : pidOrPids
+        if (targetPid) {
+          batchSaveSnapshots(targetPid, effectiveData).catch(e => console.warn('Background backfill error:', e))
+        }
+      }
+
+      setSnapshots(effectiveData)
 
       // QQQM ve USDTRY geçmiş fiyatlarını ve anlık QQQM fiyatını paralel çek
       try {
@@ -199,6 +223,7 @@ const Analytics = () => {
   // --- GRAFİK VE QQQM BENCHMARK HESAPLAMASI ---
   const { chartData, benchmarkSummary } = useMemo(() => {
     const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+    const rangeFromDate = new Date(Date.now() - range * 86400000).toISOString().split('T')[0]
     const effectiveFirstDate = firstTxDate || earliestActiveDate
     const effectiveCost = totalCost > 0 ? totalCost : currentActiveCost
 
@@ -209,7 +234,7 @@ const Analytics = () => {
       const totalV = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
       const totalC = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
       const perfV = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
-      const perfC = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
+      const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
 
       if (totalV > 0 || totalC > 0) {
         effectiveSnaps = [{
@@ -217,7 +242,7 @@ const Analytics = () => {
           total_value: Math.round(totalV),
           total_cost: Math.round(totalC),
           performance_value: Math.round(perfV),
-          performance_cost: Math.round(perfC)
+          performance_cost: Math.round(pc)
         }]
       }
     }
@@ -229,10 +254,11 @@ const Analytics = () => {
       benchmarkPrices.liveQqqm,
       usdRateLocal,
       effectiveFirstDate,
-      effectiveCost
+      effectiveCost,
+      rangeFromDate
     )
     return { chartData: points, benchmarkSummary: summary }
-  }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost])
+  }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost, range])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
   const first = chartData[0]?.deger || 0

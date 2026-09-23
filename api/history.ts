@@ -27,12 +27,18 @@ export default async function handler(req: any, res: any) {
     })
     const data = await response.json()
     const timestamps = data?.chart?.result?.[0]?.timestamp || []
-    const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []
+    const regularMarketPrice = data?.chart?.result?.[0]?.meta?.regularMarketPrice
 
-    const prices = timestamps.map((t: number, i: number) => ({
-      date: new Date(t * 1000).toISOString().split('T')[0],
-      price: closes[i]
-    })).filter((p: any) => p.price != null && !isNaN(p.price))
+    const prices = timestamps.map((t: number, i: number) => {
+      let price = closes[i]
+      if ((price == null || isNaN(price)) && i === timestamps.length - 1 && regularMarketPrice != null) {
+        price = regularMarketPrice
+      }
+      return {
+        date: new Date(t * 1000).toISOString().split('T')[0],
+        price
+      }
+    }).filter((p: any) => p.price != null && !isNaN(p.price))
 
     return res.status(200).json({ symbol, prices })
   } catch (err: any) {
