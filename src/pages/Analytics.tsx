@@ -745,12 +745,12 @@ const Analytics = () => {
                 )}
               </div>
 
-              {(totalCost > 0 || currentActiveCost > 0) && (
+              {(initialActiveCost > 0 || currentActiveCost > 0) && (
                 <div style={{ ...card, marginBottom: '16px' }}>
                   <div style={{ marginBottom: '12px' }}>
                     <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Alsaydın ne olurdu?</p>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                      {firstTxDate || earliestActiveDate || 'Portföy başlangıcı'} · {isHidden ? '••••••' : `₺${Math.round(totalCost > 0 ? totalCost : currentActiveCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`} aktif yatırım
+                      {firstTxDate || earliestActiveDate || 'Portföy başlangıcı'} · {isHidden ? '••••••' : `₺${Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`} aktif yatırım
                     </p>
                   </div>
 
@@ -763,12 +763,12 @@ const Analytics = () => {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" value={compCost !== null ? compCost : Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(totalCost > 0 ? totalCost : currentActiveCost).toString()}
+                        <input type="number" value={compCost !== null ? compCost : Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <button onClick={async () => {
                         const fromDate = (compDate !== null ? compDate : (firstTxDate || earliestActiveDate || '2025-01-01')) || '2025-01-01'
-                        const cost = Number(compCost !== null ? compCost : (totalCost > 0 ? totalCost : currentActiveCost)) || (totalCost > 0 ? totalCost : currentActiveCost)
+                        const cost = Number(compCost !== null ? compCost : (initialActiveCost > 0 ? initialActiveCost : currentActiveCost)) || (initialActiveCost > 0 ? initialActiveCost : currentActiveCost)
                         setCompLoading(true)
                         const result = await calculateComparison(cost, fromDate)
                         setComparison(result)
@@ -785,7 +785,7 @@ const Analytics = () => {
                   )}
 
                   {comparison && (() => {
-                    const baseCost = Number(comparison.baseCost) || (totalCost > 0 ? totalCost : currentActiveCost)
+                    const baseCost = Number(comparison.baseCost) || (initialActiveCost > 0 ? initialActiveCost : currentActiveCost)
                     const latestActiveVal = Number(snapshots[snapshots.length - 1]?.performance_value || snapshots[snapshots.length - 1]?.total_value || baseCost)
                     const latestActiveCost = Number(snapshots[snapshots.length - 1]?.performance_cost || snapshots[snapshots.length - 1]?.total_cost || baseCost)
                     const activePortfolioReturnPct = latestActiveCost > 0 ? ((latestActiveVal - latestActiveCost) / latestActiveCost) * 100 : 0
