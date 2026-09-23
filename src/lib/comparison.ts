@@ -4,12 +4,7 @@ export async function fetchHistoricalPrices(symbol: string, from: string, interv
   const cleanSym = symbol.trim()
   const intervalParam = interval ? `&interval=${interval}` : '&interval=1d'
   
-  const fromTimestamp = Math.floor(new Date(from).getTime() / 1000)
-  const toTimestamp = Math.floor(Date.now() / 1000)
-  const directUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSym)}?period1=${fromTimestamp}&period2=${toTimestamp}${intervalParam}`
-
   const endpoints = [
-    { type: 'direct', url: directUrl },
     { type: 'proxy', url: `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` },
     { type: 'proxy', url: `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` }
   ]
@@ -24,24 +19,8 @@ export async function fetchHistoricalPrices(symbol: string, from: string, interv
       if (!res.ok) continue
       const data = await res.json()
 
-      if (endpoint.type === 'direct') {
-        const result = data?.chart?.result?.[0]
-        if (result && result.timestamp && result.indicators?.quote?.[0]?.close) {
-          const timestamps = result.timestamp
-          const closes = result.indicators.quote[0].close
-          const prices = []
-          for (let i = 0; i < timestamps.length; i++) {
-            if (closes[i] !== null && closes[i] !== undefined) {
-              const dateStr = new Date(timestamps[i] * 1000).toISOString().split('T')[0]
-              prices.push({ date: dateStr, price: closes[i] })
-            }
-          }
-          if (prices.length > 0) return prices
-        }
-      } else {
-        if (Array.isArray(data?.prices) && data.prices.length > 0) {
-          return data.prices
-        }
+      if (Array.isArray(data?.prices) && data.prices.length > 0) {
+        return data.prices
       }
     } catch {
       // sonraki endpoint

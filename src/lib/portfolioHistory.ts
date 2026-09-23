@@ -349,12 +349,8 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     // Bu tarihteki kademeli sermaye maliyetini al
     const { cost: targetCost, perfCost: targetPerfCost } = getInterpolatedCost(date)
 
-    // Sermaye oranına göre günün piyasa değerini ölçekle
-    const capitalFactor = currentTotalCost > 0 ? Math.min(1.0, Math.max(0.05, targetCost / currentTotalCost)) : 1.0
-    const perfCapitalFactor = currentActiveCost > 0 ? Math.min(1.0, Math.max(0.05, targetPerfCost / currentActiveCost)) : 1.0
-
-    let totalVal = Math.round(nominalTotalVal * capitalFactor)
-    let perfVal = Math.round(nominalPerfVal * perfCapitalFactor)
+    let totalVal = Math.round(nominalTotalVal)
+    let perfVal = Math.round(nominalPerfVal)
 
     // Bugünün anlık snapshot'ı varsa birebir koru
     if (date >= toDate && existing && Number(existing.total_value) > 0) {
@@ -372,6 +368,7 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     }
   })
 
+  console.log(`[reconstructPortfolioHistory] Generated ${result.length} data points. Value range: ${Math.min(...result.map(r => Number(r.total_value)))} - ${Math.max(...result.map(r => Number(r.total_value)))}. Unique values: ${new Set(result.map(r => r.total_value)).size}`)
   return result
 }
 
