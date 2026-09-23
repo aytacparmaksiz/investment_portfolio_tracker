@@ -2,23 +2,46 @@ const API_BASE = 'https://kumbaram-three.vercel.app/api/history'
 
 export async function fetchHistoricalPrices(symbol: string, from: string, interval?: string): Promise<{date: string, price: number}[]> {
   const cleanSym = symbol.trim()
-  const intervalParam = interval ? `&interval=${interval}` : ''
+  const intervalParam = interval ? `&interval=${interval}` : '&interval=1d'
+  
+  const fromTimestamp = Math.floor(new Date(from).getTime() / 1000)
+  const toTimestamp = Math.floor(Date.now() / 1000)
+  const directUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSym)}?period1=${fromTimestamp}&period2=${toTimestamp}${intervalParam}`
+
   const endpoints = [
-    `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`,
-    `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${intervalParam}`
+    { type: 'direct', url: directUrl },
+    { type: 'proxy', url: `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` },
+    { type: 'proxy', url: `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` }
   ]
 
-  for (const url of endpoints) {
+  for (const endpoint of endpoints) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 8000)
-      const res = await fetch(url, { signal: controller.signal })
+      const res = await fetch(endpoint.url, { signal: controller.signal })
       clearTimeout(timeoutId)
 
       if (!res.ok) continue
       const data = await res.json()
-      if (Array.isArray(data?.prices) && data.prices.length > 0) {
-        return data.prices
+
+      if (endpoint.type === 'direct') {
+        const result = data?.chart?.result?.[0]
+        if (result && result.timestamp && result.indicators?.quote?.[0]?.close) {
+          const timestamps = result.timestamp
+          const closes = result.indicators.quote[0].close
+          const prices = []
+          for (let i = 0; i < timestamps.length; i++) {
+            if (closes[i] !== null && closes[i] !== undefined) {
+              const dateStr = new Date(timestamps[i] * 1000).toISOString().split('T')[0]
+              prices.push({ date: dateStr, price: closes[i] })
+            }
+          }
+          if (prices.length > 0) return prices
+        }
+      } else {
+        if (Array.isArray(data?.prices) && data.prices.length > 0) {
+          return data.prices
+        }
       }
     } catch {
       // sonraki endpoint

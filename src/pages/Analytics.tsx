@@ -23,7 +23,8 @@ const Analytics = () => {
   const [range, setRange] = useState<number>(30)
   const [comparison, setComparison] = useState<any | null>(null)
   const [compLoading, setCompLoading] = useState(false)
-  const [totalCost, setTotalCost] = useState<number>(0)
+  const [initialTotalCost, setInitialTotalCost] = useState<number>(0)
+  const [initialActiveCost, setInitialActiveCost] = useState<number>(0)
   const [firstTxDate, setFirstTxDate] = useState<string>('')
   const [compDate, setCompDate] = useState<string | null>(null)
   const [compCost, setCompCost] = useState<string | null>(null)
@@ -88,31 +89,33 @@ const Analytics = () => {
       // 1. En eski snapshot tarihini al (portföy başlangıç tarihi için)
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
-        .select('snapshot_date, performance_cost')
+        .select('snapshot_date, total_cost, performance_cost')
         .in('portfolio_id', allPids)
         .order('snapshot_date', { ascending: true })
         .limit(1)
 
       if (snapData?.length) {
         setFirstTxDate(snapData[0].snapshot_date)
-        if (snapData[0].performance_cost != null && Number(snapData[0].performance_cost) > 0) {
-          setTotalCost(Number(snapData[0].performance_cost))
+        if (snapData[0].total_cost != null && Number(snapData[0].total_cost) > 0) {
+          setInitialTotalCost(Number(snapData[0].total_cost))
+          setInitialActiveCost(Number(snapData[0].performance_cost) || 0)
           return
         }
       }
 
-      // 2. İlk snapshot'ta performance_cost NULL ise, BES hariç ilk geçerli performance_cost kaydını bul
+      // 2. İlk snapshot'ta total_cost NULL ise, ilk geçerli kaydını bul
       const { data: perfSnap } = await supabase
         .from('portfolio_snapshots')
-        .select('performance_cost')
+        .select('total_cost, performance_cost')
         .in('portfolio_id', allPids)
-        .not('performance_cost', 'is', null)
-        .gt('performance_cost', 0)
+        .not('total_cost', 'is', null)
+        .gt('total_cost', 0)
         .order('snapshot_date', { ascending: true })
         .limit(1)
 
-      if (perfSnap?.length && Number(perfSnap[0].performance_cost) > 0) {
-        setTotalCost(Number(perfSnap[0].performance_cost))
+      if (perfSnap?.length && Number(perfSnap[0].total_cost) > 0) {
+        setInitialTotalCost(Number(perfSnap[0].total_cost))
+        setInitialActiveCost(Number(perfSnap[0].performance_cost) || 0)
       }
     }
   }
@@ -143,6 +146,9 @@ const Analytics = () => {
       const isSparse = data.length < Math.min(days * 0.7, 10) || hasLargeGaps || hasFlatData
 
       if (isSparse && activeAssets.length > 0) {
+        const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+        const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+
         effectiveData = await reconstructPortfolioHistory({
           assets: activeAssets,
           livePrices: prices,
@@ -150,7 +156,7 @@ const Analytics = () => {
           fromDate,
           toDate: todayStr,
           firstTxDate: firstTxDate || earliestActiveDate,
-          initialCost: totalCost || currentActiveCost
+          initialCost: initialTotalCost || localCurrentTotalCost
         })
 
         // Arka planda eksik kayıtları veritabanına kaydet
@@ -236,7 +242,7 @@ const Analytics = () => {
     const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
     const rangeFromDate = new Date(Date.now() - range * 86400000).toISOString().split('T')[0]
     const effectiveFirstDate = firstTxDate || earliestActiveDate
-    const effectiveCost = totalCost > 0 ? totalCost : currentActiveCost
+    const effectiveCost = initialActiveCost > 0 ? initialActiveCost : currentActiveCost
 
     // GÜVENLİK AĞI: Veritabanında snapshot henüz oluşmamış olsa dahi aktif varlıklar varsa anlık veriden başlat
     let effectiveSnaps = [...snapshots]
@@ -269,7 +275,7 @@ const Analytics = () => {
       rangeFromDate
     )
     return { chartData: points, benchmarkSummary: summary }
-  }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost, range])
+  }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, initialActiveCost, earliestActiveDate, currentActiveCost, range])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
   const first = chartData[0]?.deger || 0
