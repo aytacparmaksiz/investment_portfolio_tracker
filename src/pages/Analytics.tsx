@@ -36,6 +36,7 @@ const Analytics = () => {
     liveQqqm: number;
   }>({ qqqm: [], usd: [], liveQqqm: 304.12 })
   const [snapshotsLoading, setSnapshotsLoading] = useState(true)
+  const [allPortfolioIds, setAllPortfolioIds] = useState<string[]>([])
 
   useEffect(() => { 
     if (user?.id) {
@@ -45,8 +46,11 @@ const Analytics = () => {
   }, [user?.id])
 
   useEffect(() => { 
-    if (portfolioId) loadSnapshots(portfolioId, range) 
-  }, [range, portfolioId])
+    const pids = allPortfolioIds.length > 0 ? allPortfolioIds : (portfolioId ? [portfolioId] : [])
+    if (pids.length > 0) {
+      loadSnapshots(pids, range) 
+    }
+  }, [range, portfolioId, allPortfolioIds])
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
@@ -75,6 +79,7 @@ const Analytics = () => {
       ...(userPortfolios?.map((p: any) => p.id) || []),
       ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
     ]
+    setAllPortfolioIds(allPids)
 
     if (allPids.length > 0) {
       loadSnapshots(allPids, range)
@@ -149,11 +154,12 @@ const Analytics = () => {
   // kullanıcının boş ekranda kalmaması için bugünün snapshot'ını otomatik oluştur ve grafiği başlat
   const autoSnapshotSavedRef = useRef(false)
   useEffect(() => {
+    const targetPid = portfolioId || (allPortfolioIds.length > 0 ? allPortfolioIds[0] : null)
     if (
       !snapshotsLoading &&
       snapshots.length === 0 &&
       assets.length > 0 &&
-      portfolioId &&
+      targetPid &&
       !autoSnapshotSavedRef.current
     ) {
       autoSnapshotSavedRef.current = true
@@ -164,12 +170,12 @@ const Analytics = () => {
       const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
 
       if (tv > 0 || tc > 0) {
-        saveSnapshot(portfolioId, tv, tc, pv, pc).then(() => {
-          loadSnapshots(portfolioId, range)
+        saveSnapshot(targetPid, tv, tc, pv, pc).then(() => {
+          loadSnapshots(allPortfolioIds.length > 0 ? allPortfolioIds : [targetPid], range)
         })
       }
     }
-  }, [snapshotsLoading, snapshots.length, assets, portfolioId, prices, range])
+  }, [snapshotsLoading, snapshots.length, assets, portfolioId, allPortfolioIds, prices, range])
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
@@ -196,8 +202,28 @@ const Analytics = () => {
     const effectiveFirstDate = firstTxDate || earliestActiveDate
     const effectiveCost = totalCost > 0 ? totalCost : currentActiveCost
 
+    // GÜVENLİK AĞI: Veritabanında snapshot henüz oluşmamış olsa dahi aktif varlıklar varsa anlık veriden başlat
+    let effectiveSnaps = [...snapshots]
+    if (effectiveSnaps.length === 0 && assets.length > 0) {
+      const todayStr = new Date().toISOString().split('T')[0]
+      const totalV = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
+      const totalC = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+      const perfV = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
+      const perfC = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
+
+      if (totalV > 0 || totalC > 0) {
+        effectiveSnaps = [{
+          snapshot_date: todayStr,
+          total_value: Math.round(totalV),
+          total_cost: Math.round(totalC),
+          performance_value: Math.round(perfV),
+          performance_cost: Math.round(perfC)
+        }]
+      }
+    }
+
     const { points, summary } = buildBenchmarkSeries(
-      snapshots,
+      effectiveSnaps,
       benchmarkPrices.qqqm,
       benchmarkPrices.usd,
       benchmarkPrices.liveQqqm,
@@ -206,7 +232,7 @@ const Analytics = () => {
       effectiveCost
     )
     return { chartData: points, benchmarkSummary: summary }
-  }, [snapshots, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost])
+  }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, totalCost, earliestActiveDate, currentActiveCost])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
   const first = chartData[0]?.deger || 0
@@ -488,9 +514,33 @@ const Analytics = () => {
               <button
                 onClick={async () => {
                   setSnapshotsLoading(true)
-                  await refresh(true)
-                  if (portfolioId) await loadSnapshots(portfolioId, range)
-                  setSnapshotsLoading(false)
+                  try {
+                    await refresh(true)
+                    const { data: userPortfolios } = await supabase
+                      .from('portfolios').select('id, name, created_at').eq('user_id', user?.id).order('created_at', { ascending: true })
+                    const { data: memberPortfolios } = await supabase
+                      .from('portfolio_members').select('portfolio_id').eq('user_id', user?.id)
+                    const pids = [
+                      ...(userPortfolios?.map((p: any) => p.id) || []),
+                      ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
+                    ]
+                    const targetPid = portfolioId || pids[0]
+
+                    if (targetPid && assets.length > 0) {
+                      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+                      const tv = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
+                      const tc = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+                      const pv = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
+                      const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
+                      await saveSnapshot(targetPid, tv, tc, pv, pc)
+                    }
+
+                    await loadSnapshots(pids.length > 0 ? pids : (targetPid ? [targetPid] : []), range)
+                  } catch (err) {
+                    console.error('Manual snapshot refresh error:', err)
+                  } finally {
+                    setSnapshotsLoading(false)
+                  }
                 }}
                 disabled={snapshotsLoading}
                 style={{

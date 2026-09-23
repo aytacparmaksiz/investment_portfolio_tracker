@@ -198,20 +198,24 @@ export function buildBenchmarkSeries(
     };
   });
 
-  if (
-    effectiveSnaps.length === 1 &&
-    firstTxDate &&
-    firstTxDate < effectiveSnaps[0].snapshot_date &&
-    initialCost &&
-    initialCost > 0
-  ) {
+  if (effectiveSnaps.length === 1) {
+    const single = effectiveSnaps[0];
+    const baseCost = (initialCost && initialCost > 0) ? initialCost : (single.total_cost > 0 ? single.total_cost : single.total_value);
+    const baseDate = (firstTxDate && firstTxDate < single.snapshot_date)
+      ? firstTxDate
+      : new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
+
+    const perfBaseCost = (initialCost && initialCost > 0)
+      ? initialCost
+      : ((single.performance_cost && single.performance_cost > 0) ? single.performance_cost : single.performance_value);
+
     effectiveSnaps = [
       {
-        snapshot_date: firstTxDate,
-        total_value: initialCost,
-        total_cost: initialCost,
-        performance_value: initialCost,
-        performance_cost: initialCost,
+        snapshot_date: baseDate,
+        total_value: baseCost,
+        total_cost: baseCost,
+        performance_value: perfBaseCost,
+        performance_cost: perfBaseCost,
         isEstimated: true,
         isSynthetic: true
       },

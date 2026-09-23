@@ -14,46 +14,50 @@ export async function saveSnapshot(
   const snapshotPayload = {
     portfolio_id: portfolioId,
     snapshot_date: today,
-    total_value: totalValue,
-    total_cost: totalCost,
-    performance_value: performanceValue,
-    performance_cost: performanceCost
+    total_value: Math.round(totalValue),
+    total_cost: Math.round(totalCost),
+    performance_value: Math.round(performanceValue),
+    performance_cost: Math.round(performanceCost)
   }
 
-  // Önce onConflict ile upsert dene
-  const { error } = await supabase
-    .from('portfolio_snapshots')
-    .upsert(snapshotPayload, { onConflict: 'portfolio_id,snapshot_date' })
+  try {
+    const { data: existing } = await supabase
+      .from('portfolio_snapshots')
+      .select('id')
+      .eq('portfolio_id', portfolioId)
+      .eq('snapshot_date', today)
+      .limit(1)
 
-  if (error) {
-    // Unique index yoksa veya PostgreSQL onConflict kısıtlaması eşleşmezse select + update/insert fallback
-    try {
-      const { data: existing } = await supabase
+    if (existing && existing.length > 0) {
+      const { error: updateErr } = await supabase
         .from('portfolio_snapshots')
-        .select('id')
-        .eq('portfolio_id', portfolioId)
-        .eq('snapshot_date', today)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .update({
+          total_value: snapshotPayload.total_value,
+          total_cost: snapshotPayload.total_cost,
+          performance_value: snapshotPayload.performance_value,
+          performance_cost: snapshotPayload.performance_cost
+        })
+        .eq('id', existing[0].id)
 
-      if (existing && existing.length > 0) {
-        await supabase
-          .from('portfolio_snapshots')
-          .update({
-            total_value: totalValue,
-            total_cost: totalCost,
-            performance_value: performanceValue,
-            performance_cost: performanceCost
-          })
-          .eq('id', existing[0].id)
-      } else {
-        await supabase
-          .from('portfolio_snapshots')
-          .insert(snapshotPayload)
+      if (updateErr) console.error('saveSnapshot update error:', updateErr)
+    } else {
+      const { error: insertErr } = await supabase
+        .from('portfolio_snapshots')
+        .insert(snapshotPayload)
+
+      if (insertErr) {
+        console.error('saveSnapshot insert error:', insertErr)
+        // Fallback: minimal insert
+        await supabase.from('portfolio_snapshots').insert({
+          portfolio_id: portfolioId,
+          snapshot_date: today,
+          total_value: snapshotPayload.total_value,
+          total_cost: snapshotPayload.total_cost
+        })
       }
-    } catch (fallbackErr) {
-      console.error('Snapshot fallback save error:', fallbackErr)
     }
+  } catch (err) {
+    console.error('saveSnapshot error:', err)
   }
 }
 
@@ -71,33 +75,32 @@ export async function fetchSnapshots(
   days: number = 90
 ): Promise<SnapshotData[]> {
   const ids = (Array.isArray(portfolioIdOrIds) ? portfolioIdOrIds : [portfolioIdOrIds]).filter(Boolean)
-  if (ids.length === 0) return []
 
   const from = new Date()
   from.setDate(from.getDate() - days)
   const fromStr = from.toISOString().split('T')[0]
 
   // 1. İlgili portföy(ler) için tarih aralığı filtreli sorgu
-  let query = supabase
-    .from('portfolio_snapshots')
-    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
+  if (ids.length > 0) {
+    let query = supabase
+      .from('portfolio_snapshots')
+      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
 
-  if (ids.length === 1) {
-    query = query.eq('portfolio_id', ids[0])
-  } else {
-    query = query.in('portfolio_id', ids)
-  }
+    if (ids.length === 1) {
+      query = query.eq('portfolio_id', ids[0])
+    } else {
+      query = query.in('portfolio_id', ids)
+    }
 
-  const { data, error } = await query
-    .gte('snapshot_date', fromStr)
-    .order('snapshot_date', { ascending: true })
+    const { data, error } = await query
+      .gte('snapshot_date', fromStr)
+      .order('snapshot_date', { ascending: true })
 
-  if (error) {
-    console.error('fetchSnapshots error:', error)
-  }
+    if (data && data.length > 0) {
+      return deduplicateSnapshots(data as SnapshotData[])
+    }
 
-  // 2. Eğer aralıkta hiç snapshot bulunamadıysa (örneğin kayıtlar seçili aralıktan eskiyse), tüm geçmişi çekerek grafiği kurtar
-  if (!data || data.length === 0) {
+    // 2. Belirtilen gün aralığında bulunamadıysa portföyün tüm kayıtlarını çek
     let allQuery = supabase
       .from('portfolio_snapshots')
       .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
@@ -109,15 +112,22 @@ export async function fetchSnapshots(
     }
 
     const { data: allData, error: allErr } = await allQuery.order('snapshot_date', { ascending: true })
-    if (allErr) console.error('fetch all snapshots error:', allErr)
-
     if (allData && allData.length > 0) {
       return deduplicateSnapshots(allData as SnapshotData[])
     }
-    return []
   }
 
-  return deduplicateSnapshots(data as SnapshotData[])
+  // 3. Son çare: RLS kapsamında kullanıcının oturumuna ait TÜM snapshot kayıtlarını getir
+  const { data: userScopedData } = await supabase
+    .from('portfolio_snapshots')
+    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
+    .order('snapshot_date', { ascending: true })
+
+  if (userScopedData && userScopedData.length > 0) {
+    return deduplicateSnapshots(userScopedData as SnapshotData[])
+  }
+
+  return []
 }
 
 export { deduplicateSnapshots } from './benchmark'
