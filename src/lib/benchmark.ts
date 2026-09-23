@@ -167,8 +167,8 @@ export function buildBenchmarkSeries(
   }[] = sortedSnaps.map(s => {
     const totalV = Number(s.total_value || 0);
     const totalC = Number(s.total_cost || 0);
-    const hasPerfV = s.performance_value != null;
-    const hasPerfC = s.performance_cost != null;
+    const hasPerfV = s.performance_value !== null && s.performance_value !== undefined;
+    const hasPerfC = s.performance_cost !== null && s.performance_cost !== undefined;
 
     let activeV: number;
     let activeC: number;
@@ -178,7 +178,7 @@ export function buildBenchmarkSeries(
       activeV = Number(s.performance_value);
       activeC = hasPerfC ? Number(s.performance_cost) : Math.round(totalC * costRatio);
     } else {
-      if (firstValid) {
+      if (firstValid && Number(firstValid.performance_value) > 0) {
         activeV = Math.round(totalV * activeRatio);
         activeC = Math.round(totalC * costRatio);
         isEstimated = true;
@@ -310,7 +310,9 @@ export function buildBenchmarkSeries(
       let leadBaseCost = firstSnap.total_cost;
       let leadPerfCost = firstSnap.performance_cost;
 
-      if (initialCost && initialCost > 0 && firstTxDate && firstTxDate < firstSnap.snapshot_date) {
+      // Yalnızca leadDays 7 günden uzunsa ve portföy başlangıç tarihi mevcutsa geçmiş başlangıç maliyetinden enterpole et.
+      // Kısa dönemlerde (haftasonu vb. <= 7 gün) ilk snapshot'ın gerçek maliyetini koru (439k -> 1M ani zıplamalarını önler).
+      if (leadDays > 7 && initialCost && initialCost > 0 && firstTxDate && firstTxDate < firstSnap.snapshot_date) {
         const tTx = new Date(firstTxDate).getTime();
         if (tFirst > tTx && tRange >= tTx) {
           const factor = (tRange - tTx) / (tFirst - tTx);
@@ -326,8 +328,8 @@ export function buildBenchmarkSeries(
       for (let d = 0; d < leadDays; d++) {
         const dStr = new Date(tRange + d * 86400000).toISOString().split('T')[0];
         const factor = d / leadDays;
-        const cost = Math.round(leadBaseCost + factor * (firstSnap.total_cost - leadBaseCost));
-        const perfCost = Math.round(leadPerfCost + factor * (firstSnap.performance_cost - leadPerfCost));
+        const cost = (leadDays <= 7) ? firstSnap.total_cost : Math.round(leadBaseCost + factor * (firstSnap.total_cost - leadBaseCost));
+        const perfCost = (leadDays <= 7) ? firstSnap.performance_cost : Math.round(leadPerfCost + factor * (firstSnap.performance_cost - leadPerfCost));
 
         const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
         const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
@@ -335,8 +337,12 @@ export function buildBenchmarkSeries(
         const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
         const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
 
-        const totalVal = Math.round((leadBaseCost + factor * (firstSnap.total_value - leadBaseCost)) * (0.95 + 0.05 * marketRatio));
-        const perfVal = Math.round((leadPerfCost + factor * (firstSnap.performance_value - leadPerfCost)) * (0.95 + 0.05 * marketRatio));
+        const totalVal = (leadDays <= 7)
+          ? firstSnap.total_value
+          : Math.round((leadBaseCost + factor * (firstSnap.total_value - leadBaseCost)) * (0.95 + 0.05 * marketRatio));
+        const perfVal = (leadDays <= 7)
+          ? firstSnap.performance_value
+          : Math.round((leadPerfCost + factor * (firstSnap.performance_value - leadPerfCost)) * (0.95 + 0.05 * marketRatio));
 
         leadSnaps.push({
           snapshot_date: dStr,
@@ -368,8 +374,9 @@ export function buildBenchmarkSeries(
           for (let d = 1; d < gapDays; d++) {
             const dStr = new Date(tCurr + d * 86400000).toISOString().split('T')[0];
             const factor = d / gapDays;
-            const cost = Math.round(curr.total_cost + factor * (next.total_cost - curr.total_cost));
-            const perfCost = Math.round(curr.performance_cost + factor * (next.performance_cost - curr.performance_cost));
+            // Ara günlerde maliyet adım olarak son bilinen maliyette kalır (yatırım yapılmadıkça kademeli artmaz)
+            const cost = curr.total_cost;
+            const perfCost = curr.performance_cost;
 
             const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
             const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);

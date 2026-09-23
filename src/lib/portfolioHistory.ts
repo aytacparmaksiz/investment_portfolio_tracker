@@ -346,18 +346,26 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     let totalVal = Math.round(nominalTotalVal)
     let perfVal = Math.round(nominalPerfVal)
 
-    // Bugünün anlık snapshot'ı varsa birebir koru
-    if (date >= toDate && existing && Number(existing.total_value) > 0) {
+    // Veritabanında kayıtlı gerçek snapshot varsa (tarihi ne olursa olsun) birebir koru
+    if (existing && Number(existing.total_value) > 0) {
       totalVal = Math.round(Number(existing.total_value))
-      perfVal = Math.round(Number(existing.performance_value || totalVal))
+      perfVal = Math.round(Number(existing.performance_value ?? totalVal))
     }
+
+    const finalCost = (existing && existing.total_cost != null && Number(existing.total_cost) > 0)
+      ? Math.round(Number(existing.total_cost))
+      : targetCost
+
+    const finalPerfCost = (existing && existing.performance_cost != null && Number(existing.performance_cost) > 0)
+      ? Math.round(Number(existing.performance_cost))
+      : targetPerfCost
 
     return {
       snapshot_date: date,
       total_value: totalVal,
-      total_cost: targetCost,
+      total_cost: finalCost,
       performance_value: perfVal,
-      performance_cost: targetPerfCost,
+      performance_cost: finalPerfCost,
       created_at: existing?.created_at || `${date}T12:00:00.000Z`
     }
   })

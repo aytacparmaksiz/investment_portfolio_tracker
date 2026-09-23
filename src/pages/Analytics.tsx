@@ -37,6 +37,32 @@ const Analytics = () => {
     usd: { date: string; price: number }[];
     liveQqqm: number;
   }>({ qqqm: [], usd: [], liveQqqm: 304.12 })
+  // QQQM Benchmark geçmiş fiyatlarını ve döviz kurunu range değiştiğinde anında ve bağımsız çek
+  useEffect(() => {
+    let isCancelled = false
+    const loadBenchmark = async () => {
+      const fromDate = new Date(Date.now() - range * 86400000).toISOString().split('T')[0]
+      try {
+        const [qqqmData, usdData, liveQqqmData] = await Promise.all([
+          fetchHistoricalPrices('QQQM', fromDate),
+          fetchHistoricalPrices('USDTRY=X', fromDate),
+          fetchPrice('QQQM')
+        ])
+        if (!isCancelled) {
+          setBenchmarkPrices({
+            qqqm: qqqmData,
+            usd: usdData,
+            liveQqqm: liveQqqmData || 304.12
+          })
+        }
+      } catch (benchErr) {
+        console.warn('Error fetching benchmark prices:', benchErr)
+      }
+    }
+    loadBenchmark()
+    return () => { isCancelled = true }
+  }, [range])
+
   const [snapshotsLoading, setSnapshotsLoading] = useState(true)
   const [allPortfolioIds, setAllPortfolioIds] = useState<string[]>([])
 
@@ -132,23 +158,14 @@ const Analytics = () => {
       const todayStr = new Date().toISOString().split('T')[0]
       const fromDate = defaultRangeDate
 
-      // Seyrek veya düz veri tespiti:
-      // 1. Snapshot sayısı gün aralığına göre çok azsa (< 15 veya günlerin %70'inden azsa)
-      // 2. Günler arasında 4 günden büyük boşluk varsa
-      // 3. Veritabanındaki tüm snapshot değerleri birbiriyle tıpatıp aynıysa (düz çizgi hatası)
-      // 4. Veritabanında 2 veya daha az snapshot varsa (tek doğru oluşmaması için)
-      // varlıkların gerçek piyasa hareketlerinden eksik günleri yeniden yapılandırarak günlük dalgalanmaları oluştur.
       let effectiveData = data
-      const hasLargeGaps = data.some((s, idx) => {
-        if (idx === 0) return false
-        const prevDate = new Date(data[idx - 1].snapshot_date).getTime()
-        const currDate = new Date(s.snapshot_date).getTime()
-        return (currDate - prevDate) > 4 * 86400000 // gap > 4 days
-      })
-      const hasFlatData = data.length > 2 && data.slice(1).every(s => Number(s.total_value) === Number(data[0].total_value))
-      const isSparse = data.length < Math.min(days * 0.7, 15) || hasLargeGaps || hasFlatData || data.length <= 2
 
-      if (isSparse && activeAssets.length > 0) {
+      // KULLANICI TALEBİ / GERÇEK VERİ KORUMA:
+      // Supabase'de portföyün toplam değeri ve maliyeti için kayıtlı günlük snapshot'lar varsa (data.length > 1),
+      // bu verileri doğrudan kullan ve KESİNLİKLE sentetik normalizasyon ile EZME!
+      // Yalnızca ve yalnızca veritabanında hiç snapshot yoksa veya sadece 1 snapshot varsa
+      // yeni kullanıcının ekranının boş kalmaması için geçmişi simüle et.
+      if (data.length <= 1 && activeAssets.length > 0) {
         const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
 
@@ -184,31 +201,14 @@ const Analytics = () => {
           initialCost: initCost || localCurrentTotalCost
         })
 
-        // Arka planda eksik kayıtları veritabanına kaydet
+        // Sadece sıfır snapshot varsa arka planda eksik kayıtları veritabanına kaydet
         const targetPid = Array.isArray(pidOrPids) ? pidOrPids[0] : pidOrPids
-        if (targetPid) {
+        if (targetPid && data.length === 0) {
           batchSaveSnapshots(targetPid, effectiveData).catch(e => console.warn('Background backfill error:', e))
         }
       }
 
       setSnapshots(effectiveData)
-
-      // QQQM ve USDTRY geçmiş fiyatlarını ve anlık QQQM fiyatını paralel çek
-      try {
-        const [qqqmData, usdData, liveQqqmData] = await Promise.all([
-          fetchHistoricalPrices('QQQM', fromDate),
-          fetchHistoricalPrices('USDTRY=X', fromDate),
-          fetchPrice('QQQM')
-        ])
-
-        setBenchmarkPrices({
-          qqqm: qqqmData,
-          usd: usdData,
-          liveQqqm: liveQqqmData || 304.12
-        })
-      } catch (benchErr) {
-        console.warn('Error fetching benchmark prices:', benchErr)
-      }
     } catch (snapErr) {
       console.error('Error loading snapshots:', snapErr)
     } finally {

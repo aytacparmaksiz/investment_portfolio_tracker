@@ -1,9 +1,18 @@
 const API_BASE = 'https://kumbaram-three.vercel.app/api/history'
 
+const priceCache = new Map<string, { timestamp: number; data: { date: string; price: number }[] }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
+
 export async function fetchHistoricalPrices(symbol: string, from: string, interval?: string): Promise<{date: string, price: number}[]> {
   const cleanSym = symbol.trim()
   const intervalParam = interval ? `&interval=${interval}` : '&interval=1d'
-  
+  const cacheKey = `${cleanSym}_${from}_${interval || '1d'}`
+
+  const cached = priceCache.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL && cached.data.length > 0) {
+    return cached.data
+  }
+
   const endpoints = [
     { type: 'proxy', url: `/api/history?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` },
     { type: 'proxy', url: `${API_BASE}?symbol=${encodeURIComponent(cleanSym)}&from=${from}${interval ? '&interval='+interval : ''}` }
@@ -20,6 +29,7 @@ export async function fetchHistoricalPrices(symbol: string, from: string, interv
       const data = await res.json()
 
       if (Array.isArray(data?.prices) && data.prices.length > 0) {
+        priceCache.set(cacheKey, { timestamp: Date.now(), data: data.prices })
         return data.prices
       }
     } catch {

@@ -229,6 +229,33 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   const res = buildBenchmarkSeries(snaps, [], [], 100, 40, '2026-06-25', 439482, '2026-08-24')
   assert(res.points.length === 31, `Distant preceding snapshot is omitted, points count is 31 (got ${res.points.length})`)
   assert(res.points[0].rawDate === '2026-08-24', `First point is 2026-08-24 NOT 2026-06-25 (got ${res.points[0].rawDate})`)
+  assert(res.points[0].maliyet === 900000, `First point maliyet preserves snapshot cost 900000, not ancient 439482 (got ${res.points[0].maliyet})`)
+}
+
+// 12. Test QQQM benchmark with fluctuating prices produces non-flat line and accurate return:
+{
+  const snaps: SnapshotRecord[] = [
+    { snapshot_date: '2026-08-24', total_value: 1000000, total_cost: 1000000, performance_value: 1000000, performance_cost: 1000000 },
+    { snapshot_date: '2026-09-01', total_value: 1050000, total_cost: 1000000, performance_value: 1050000, performance_cost: 1000000 },
+    { snapshot_date: '2026-09-23', total_value: 1100000, total_cost: 1000000, performance_value: 1100000, performance_cost: 1000000 }
+  ]
+  const qqqmPrices = [
+    { date: '2026-08-24', price: 290 },
+    { date: '2026-09-01', price: 300 },
+    { date: '2026-09-23', price: 310 }
+  ]
+  const usdPrices = [
+    { date: '2026-08-24', price: 40 },
+    { date: '2026-09-01', price: 40 },
+    { date: '2026-09-23', price: 40 }
+  ]
+  const res = buildBenchmarkSeries(snaps, qqqmPrices, usdPrices, 310, 40, '2026-08-24', 1000000, '2026-08-24')
+  assert(res.summary !== null, 'Summary is not null')
+  assert(res.summary!.qqqmReturnPct > 0, `QQQM return is positive and non-zero (got %${res.summary!.qqqmReturnPct.toFixed(2)})`)
+  // QQQM grew from 290 to 310: (310 - 290) / 290 = ~6.896%
+  assert(Math.abs(res.summary!.qqqmReturnPct - 6.896) < 0.1, `QQQM return matches expected price return of ~6.9% (got %${res.summary!.qqqmReturnPct.toFixed(2)})`)
+  assert(res.points[0].qqqmDeger === 1000000, 'QQQM starts matching initial active portfolio (1000000)')
+  assert(res.points[res.points.length - 1].qqqmDeger > 1060000, `QQQM line increases to end value (got ${res.points[res.points.length - 1].qqqmDeger})`)
 }
 
 console.log('\n--- ALL UNIT TESTS PASSED! ---')
