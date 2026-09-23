@@ -222,8 +222,6 @@ export function buildBenchmarkSeries(
 
   if (effectiveSnaps.length === 1) {
     const single = effectiveSnaps[0];
-    const baseCost = (initialCost && initialCost > 0) ? initialCost : (single.total_cost > 0 ? single.total_cost : single.total_value);
-    
     let baseDate: string;
     if (rangeFromDate && rangeFromDate < single.snapshot_date) {
       baseDate = rangeFromDate;
@@ -233,22 +231,169 @@ export function buildBenchmarkSeries(
       baseDate = new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
     }
 
-    const perfBaseCost = (initialCost && initialCost > 0)
-      ? initialCost
-      : ((single.performance_cost && single.performance_cost > 0) ? single.performance_cost : single.performance_value);
+    let baseCost = single.total_cost > 0 ? single.total_cost : single.total_value;
+    let perfBaseCost = (single.performance_cost && single.performance_cost > 0) ? single.performance_cost : single.performance_value;
 
-    effectiveSnaps = [
-      {
-        snapshot_date: baseDate,
-        total_value: baseCost,
-        total_cost: baseCost,
-        performance_value: perfBaseCost,
-        performance_cost: perfBaseCost,
-        isEstimated: true,
-        isSynthetic: true
-      },
-      ...effectiveSnaps
-    ];
+    if (initialCost && initialCost > 0 && firstTxDate && firstTxDate < single.snapshot_date) {
+      const tFirst = new Date(firstTxDate).getTime();
+      const tSingle = new Date(single.snapshot_date).getTime();
+      const tBase = new Date(baseDate).getTime();
+      if (tSingle > tFirst && tBase >= tFirst) {
+        const factor = (tBase - tFirst) / (tSingle - tFirst);
+        baseCost = Math.round(initialCost + factor * (single.total_cost - initialCost));
+        perfBaseCost = Math.round(initialCost + factor * (single.performance_cost - initialCost));
+      } else {
+        baseCost = initialCost;
+        perfBaseCost = initialCost;
+      }
+    } else if (initialCost && initialCost > 0) {
+      baseCost = initialCost;
+      perfBaseCost = initialCost;
+    }
+
+    const startT = new Date(baseDate).getTime();
+    const endT = new Date(single.snapshot_date).getTime();
+    const totalDays = Math.max(1, Math.round((endT - startT) / 86400000));
+
+    if (rangeFromDate && totalDays > 1) {
+      const synthDays: typeof effectiveSnaps = [];
+      for (let dayIdx = 0; dayIdx < totalDays; dayIdx++) {
+        const dStr = new Date(startT + dayIdx * 86400000).toISOString().split('T')[0];
+        const factor = dayIdx / totalDays;
+        const cost = Math.round(baseCost + factor * (single.total_cost - baseCost));
+        const perfCost = Math.round(perfBaseCost + factor * (single.performance_cost - perfBaseCost));
+
+        const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
+        const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
+        const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
+        const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
+        const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
+
+        const totalVal = Math.round((baseCost + factor * (single.total_value - baseCost)) * (0.95 + 0.05 * marketRatio));
+        const perfVal = Math.round((perfBaseCost + factor * (single.performance_value - perfBaseCost)) * (0.95 + 0.05 * marketRatio));
+
+        synthDays.push({
+          snapshot_date: dStr,
+          total_value: totalVal,
+          total_cost: cost,
+          performance_value: perfVal,
+          performance_cost: perfCost,
+          isEstimated: true,
+          isSynthetic: true
+        });
+      }
+      effectiveSnaps = [...synthDays, single];
+    } else {
+      effectiveSnaps = [
+        {
+          snapshot_date: baseDate,
+          total_value: baseCost,
+          total_cost: baseCost,
+          performance_value: perfBaseCost,
+          performance_cost: perfBaseCost,
+          isEstimated: true,
+          isSynthetic: true
+        },
+        ...effectiveSnaps
+      ];
+    }
+  }
+
+  // 1. If rangeFromDate is specified and the first snapshot starts after rangeFromDate, prepend lead days
+  if (rangeFromDate && effectiveSnaps.length > 0 && effectiveSnaps[0].snapshot_date > rangeFromDate) {
+    const firstSnap = effectiveSnaps[0];
+    const tRange = new Date(rangeFromDate).getTime();
+    const tFirst = new Date(firstSnap.snapshot_date).getTime();
+    const leadDays = Math.round((tFirst - tRange) / 86400000);
+
+    if (leadDays >= 1) {
+      let leadBaseCost = firstSnap.total_cost;
+      let leadPerfCost = firstSnap.performance_cost;
+
+      if (initialCost && initialCost > 0 && firstTxDate && firstTxDate < firstSnap.snapshot_date) {
+        const tTx = new Date(firstTxDate).getTime();
+        if (tFirst > tTx && tRange >= tTx) {
+          const factor = (tRange - tTx) / (tFirst - tTx);
+          leadBaseCost = Math.round(initialCost + factor * (firstSnap.total_cost - initialCost));
+          leadPerfCost = Math.round(initialCost + factor * (firstSnap.performance_cost - initialCost));
+        } else {
+          leadBaseCost = initialCost;
+          leadPerfCost = initialCost;
+        }
+      }
+
+      const leadSnaps: typeof effectiveSnaps = [];
+      for (let d = 0; d < leadDays; d++) {
+        const dStr = new Date(tRange + d * 86400000).toISOString().split('T')[0];
+        const factor = d / leadDays;
+        const cost = Math.round(leadBaseCost + factor * (firstSnap.total_cost - leadBaseCost));
+        const perfCost = Math.round(leadPerfCost + factor * (firstSnap.performance_cost - leadPerfCost));
+
+        const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
+        const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
+        const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
+        const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
+        const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
+
+        const totalVal = Math.round((leadBaseCost + factor * (firstSnap.total_value - leadBaseCost)) * (0.95 + 0.05 * marketRatio));
+        const perfVal = Math.round((leadPerfCost + factor * (firstSnap.performance_value - leadPerfCost)) * (0.95 + 0.05 * marketRatio));
+
+        leadSnaps.push({
+          snapshot_date: dStr,
+          total_value: totalVal,
+          total_cost: cost,
+          performance_value: perfVal,
+          performance_cost: perfCost,
+          isEstimated: true,
+          isSynthetic: true
+        });
+      }
+      effectiveSnaps = [...leadSnaps, ...effectiveSnaps];
+    }
+  }
+
+  // 2. Fill any gaps > 1 day between consecutive snapshots with daily market-simulated points
+  if (effectiveSnaps.length > 1) {
+    const filledSnaps: typeof effectiveSnaps = [];
+    for (let i = 0; i < effectiveSnaps.length; i++) {
+      filledSnaps.push(effectiveSnaps[i]);
+      if (i < effectiveSnaps.length - 1) {
+        const curr = effectiveSnaps[i];
+        const next = effectiveSnaps[i + 1];
+        const tCurr = new Date(curr.snapshot_date).getTime();
+        const tNext = new Date(next.snapshot_date).getTime();
+        const gapDays = Math.round((tNext - tCurr) / 86400000);
+
+        if (gapDays > 1) {
+          for (let d = 1; d < gapDays; d++) {
+            const dStr = new Date(tCurr + d * 86400000).toISOString().split('T')[0];
+            const factor = d / gapDays;
+            const cost = Math.round(curr.total_cost + factor * (next.total_cost - curr.total_cost));
+            const perfCost = Math.round(curr.performance_cost + factor * (next.performance_cost - curr.performance_cost));
+
+            const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
+            const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
+            const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
+            const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
+            const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
+
+            const totalVal = Math.round((curr.total_value + factor * (next.total_value - curr.total_value)) * (0.95 + 0.05 * marketRatio));
+            const perfVal = Math.round((curr.performance_value + factor * (next.performance_value - curr.performance_value)) * (0.95 + 0.05 * marketRatio));
+
+            filledSnaps.push({
+              snapshot_date: dStr,
+              total_value: totalVal,
+              total_cost: cost,
+              performance_value: perfVal,
+              performance_cost: perfCost,
+              isEstimated: true,
+              isSynthetic: true
+            });
+          }
+        }
+      }
+    }
+    effectiveSnaps = filledSnaps;
   }
 
   // Calculate QQQM shadow investment tracking active portfolio capital

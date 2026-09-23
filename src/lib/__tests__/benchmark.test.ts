@@ -132,7 +132,7 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
     { snapshot_date: '2026-09-16', total_value: 200000, total_cost: 150000, performance_value: 120000, performance_cost: 90000 }
   ]
   const resSingle = buildBenchmarkSeries(singleSnap, [], [], 100, 40, '2026-09-01', 80000)
-  assert(resSingle.points.length === 2, 'Synthesized start date for single snapshot')
+  assert(resSingle.points.length === 16, `Synthesized daily points from firstTxDate for single snapshot (got ${resSingle.points.length})`)
   assert(resSingle.points[0].rawDate === '2026-09-01', 'Synthesized start date matches firstTxDate')
   assert(resSingle.points[0].aktifDeger === 80000, 'Synthesized start date has initialCost as active value')
 }
@@ -202,8 +202,8 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   ]
   // With 30-day range starting from 2026-08-23:
   const res = buildBenchmarkSeries(snaps, [], [], 100, 40, '2026-06-22', 500000, '2026-08-23')
-  // Should include preceding baseline (2026-08-20) plus in-range dates (2026-09-01, 2026-09-22)
-  assert(res.points.length === 3, `Filtered to range with baseline preserves correct points (got ${res.points.length})`)
+  // Should include preceding baseline (2026-08-20) plus in-range dates filled with daily continuity
+  assert(res.points.length === 34, `Filtered to range with baseline preserves correct points and daily continuity (got ${res.points.length})`)
   assert(res.points[0].rawDate === '2026-08-20', `Starting point is closest preceding baseline (got ${res.points[0].rawDate})`)
 }
 
@@ -214,7 +214,7 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   ]
   // User selected 7G (7 days, from 2026-09-15)
   const res = buildBenchmarkSeries(single, [], [], 100, 40, '2026-06-22', 500000, '2026-09-15')
-  assert(res.points.length === 2, `Single snap has 2 points (got ${res.points.length})`)
+  assert(res.points.length === 8, `Single snap has 8 points across 7-day range (got ${res.points.length})`)
   assert(res.points[0].rawDate === '2026-09-15', `Day 0 baseline date is range start 2026-09-15 NOT 2026-06-22 (got ${res.points[0].rawDate})`)
 }
 
@@ -227,8 +227,8 @@ console.log('--- TEST SUITE: Benchmark & Snapshot Fixes ---\n')
   ]
   // 30-day range starting 2026-08-24. Preceding is 2026-06-25 (60 days ago!).
   const res = buildBenchmarkSeries(snaps, [], [], 100, 40, '2026-06-25', 439482, '2026-08-24')
-  assert(res.points.length === 2, `Distant preceding snapshot is omitted, points count is 2 (got ${res.points.length})`)
-  assert(res.points[0].rawDate === '2026-08-25', `First point is 2026-08-25 NOT 2026-06-25 (got ${res.points[0].rawDate})`)
+  assert(res.points.length === 31, `Distant preceding snapshot is omitted, points count is 31 (got ${res.points.length})`)
+  assert(res.points[0].rawDate === '2026-08-24', `First point is 2026-08-24 NOT 2026-06-25 (got ${res.points[0].rawDate})`)
 }
 
 console.log('\n--- ALL UNIT TESTS PASSED! ---')

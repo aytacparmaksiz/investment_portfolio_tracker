@@ -107,15 +107,14 @@ export function calculateAssetUnitPriceTRY(
   }
 
   if (asset.type === 'fon') {
-    // TEFAS fonları için maliyet ile bugünkü canlı fiyat arasında tarihe bağlı interpolasyon
-    const startStr = (asset.start_date || asset.created_at || '').split('T')[0]
     const todayStr = new Date().toISOString().split('T')[0]
     const startCost = Number(asset.avg_cost || livePrice)
-
-    if (date <= startStr) return startCost
     if (date >= todayStr) return livePrice
 
-    const startTime = new Date(startStr).getTime()
+    // Determine baseline trajectory towards livePrice
+    const startStr = (asset.start_date || '').split('T')[0]
+    const effectiveStart = (startStr && startStr < todayStr) ? startStr : date
+    const startTime = new Date(effectiveStart).getTime()
     const endTime = new Date(todayStr).getTime()
     const targetTime = new Date(date).getTime()
 
@@ -131,7 +130,8 @@ export function calculateAssetUnitPriceTRY(
       const dayXu100 = findClosestPrice(xu100Series, date, liveXu100)
       if (liveXu100 > 0 && dayXu100 > 0) {
         const marketRatio = dayXu100 / liveXu100
-        const marketAdjusted = (startCost + (livePrice - startCost) * baseFraction) * (0.90 + 0.10 * marketRatio)
+        const nominal = startCost + (livePrice - startCost) * baseFraction
+        const marketAdjusted = nominal * (0.85 + 0.15 * marketRatio)
         return Math.max(0, marketAdjusted)
       }
     }
@@ -222,8 +222,14 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     })
   )
 
-  // 3. Tarih kümesini oluştur (fiyat tarihlerinden veya takvim günlerinden)
+  // 3. Tarih kümesini oluştur (aralıktaki her bir takvim günü için tam günlük zaman serisi)
   const dateSet = new Set<string>()
+  const curr = new Date(fromDate)
+  const end = new Date(toDate)
+  while (curr <= end) {
+    dateSet.add(curr.toISOString().split('T')[0])
+    curr.setDate(curr.getDate() + 1)
+  }
   Object.values(priceMaps).forEach(series => {
     series.forEach(item => {
       if (item.date >= fromDate && item.date <= toDate) {
@@ -231,18 +237,6 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
       }
     })
   })
-
-  // Eğer piyasa tarihleri çok az ise (örneğin tatil günleri veya ağ hatası), takvim günlerini üret
-  if (dateSet.size < 5) {
-    const curr = new Date(fromDate)
-    const end = new Date(toDate)
-    while (curr <= end) {
-      dateSet.add(curr.toISOString().split('T')[0])
-      curr.setDate(curr.getDate() + 1)
-    }
-  }
-
-  // Her zaman bugünün tarihini ve başlangıç tarihini dahil et
   dateSet.add(fromDate)
   dateSet.add(toDate)
 

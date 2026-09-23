@@ -49,10 +49,10 @@ const Analytics = () => {
 
   useEffect(() => { 
     const pids = allPortfolioIds.length > 0 ? allPortfolioIds : (portfolioId ? [portfolioId] : [])
-    if (pids.length > 0) {
+    if (pids.length > 0 && !loading && assets.length > 0) {
       loadSnapshots(pids, range, assets) 
     }
-  }, [range, portfolioId, allPortfolioIds, assets])
+  }, [range, portfolioId, allPortfolioIds, assets, loading, prices])
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
@@ -84,8 +84,6 @@ const Analytics = () => {
     setAllPortfolioIds(allPids)
 
     if (allPids.length > 0) {
-      loadSnapshots(allPids, range)
-
       // 1. En eski snapshot tarihini al (portföy başlangıç tarihi için)
       const { data: snapData } = await supabase
         .from('portfolio_snapshots')
@@ -121,7 +119,11 @@ const Analytics = () => {
   }
 
   const loadSnapshots = async (pidOrPids: string | string[], days: number, currentAssets?: any[]) => {
-    const activeAssets = currentAssets && currentAssets.length > 0 ? currentAssets : assets
+    const activeAssets = (currentAssets && currentAssets.length > 0) ? currentAssets : assets
+    if (!activeAssets || activeAssets.length === 0) {
+      setSnapshotsLoading(false)
+      return
+    }
     setSnapshotsLoading(true)
     try {
       const data = await fetchSnapshots(pidOrPids, days)
@@ -131,9 +133,10 @@ const Analytics = () => {
       const fromDate = defaultRangeDate
 
       // Seyrek veya düz veri tespiti:
-      // 1. Snapshot sayısı gün aralığına göre çok azsa (< 10 veya günlerin %70'inden azsa)
+      // 1. Snapshot sayısı gün aralığına göre çok azsa (< 15 veya günlerin %70'inden azsa)
       // 2. Günler arasında 4 günden büyük boşluk varsa
       // 3. Veritabanındaki tüm snapshot değerleri birbiriyle tıpatıp aynıysa (düz çizgi hatası)
+      // 4. Veritabanında 2 veya daha az snapshot varsa (tek doğru oluşmaması için)
       // varlıkların gerçek piyasa hareketlerinden eksik günleri yeniden yapılandırarak günlük dalgalanmaları oluştur.
       let effectiveData = data
       const hasLargeGaps = data.some((s, idx) => {
@@ -143,11 +146,33 @@ const Analytics = () => {
         return (currDate - prevDate) > 4 * 86400000 // gap > 4 days
       })
       const hasFlatData = data.length > 2 && data.slice(1).every(s => Number(s.total_value) === Number(data[0].total_value))
-      const isSparse = data.length < Math.min(days * 0.7, 10) || hasLargeGaps || hasFlatData
+      const isSparse = data.length < Math.min(days * 0.7, 15) || hasLargeGaps || hasFlatData || data.length <= 2
 
       if (isSparse && activeAssets.length > 0) {
         const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+
+        let initCost = initialTotalCost
+        let initActiveCost = initialActiveCost
+        let initDate = firstTxDate
+
+        if (!initDate || initCost <= 0) {
+          const { data: snapData } = await supabase
+            .from('portfolio_snapshots')
+            .select('snapshot_date, total_cost, performance_cost')
+            .in('portfolio_id', Array.isArray(pidOrPids) ? pidOrPids : [pidOrPids])
+            .order('snapshot_date', { ascending: true })
+            .limit(1)
+
+          if (snapData && snapData.length > 0) {
+            initDate = snapData[0].snapshot_date
+            initCost = Number(snapData[0].total_cost)
+            initActiveCost = Number(snapData[0].performance_cost) || 0
+            setFirstTxDate(initDate)
+            setInitialTotalCost(initCost)
+            setInitialActiveCost(initActiveCost)
+          }
+        }
 
         effectiveData = await reconstructPortfolioHistory({
           assets: activeAssets,
@@ -155,8 +180,8 @@ const Analytics = () => {
           existingSnapshots: data,
           fromDate,
           toDate: todayStr,
-          firstTxDate: firstTxDate || earliestActiveDate,
-          initialCost: initialTotalCost || localCurrentTotalCost
+          firstTxDate: initDate || earliestActiveDate,
+          initialCost: initCost || localCurrentTotalCost
         })
 
         // Arka planda eksik kayıtları veritabanına kaydet
@@ -190,33 +215,6 @@ const Analytics = () => {
       setSnapshotsLoading(false)
     }
   }
-
-  // Otomatik snapshot garantisi: Eğer veritabanında henüz snapshot yoksa fakat kullanıcının aktif varlıkları varsa,
-  // kullanıcının boş ekranda kalmaması için bugünün snapshot'ını otomatik oluştur ve grafiği başlat
-  const autoSnapshotSavedRef = useRef(false)
-  useEffect(() => {
-    const targetPid = portfolioId || (allPortfolioIds.length > 0 ? allPortfolioIds[0] : null)
-    if (
-      !snapshotsLoading &&
-      snapshots.length === 0 &&
-      assets.length > 0 &&
-      targetPid &&
-      !autoSnapshotSavedRef.current
-    ) {
-      autoSnapshotSavedRef.current = true
-      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
-      const tv = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
-      const tc = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
-      const pv = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
-      const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
-
-      if (tv > 0 || tc > 0) {
-        saveSnapshot(targetPid, tv, tc, pv, pc).then(() => {
-          loadSnapshots(allPortfolioIds.length > 0 ? allPortfolioIds : [targetPid], range)
-        })
-      }
-    }
-  }, [snapshotsLoading, snapshots.length, assets, portfolioId, allPortfolioIds, prices, range])
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
@@ -578,7 +576,7 @@ const Analytics = () => {
                       await saveSnapshot(targetPid, tv, tc, pv, pc)
                     }
 
-                    await loadSnapshots(pids.length > 0 ? pids : (targetPid ? [targetPid] : []), range)
+                    await loadSnapshots(pids.length > 0 ? pids : (targetPid ? [targetPid] : []), range, assets)
                   } catch (err) {
                     console.error('Manual snapshot refresh error:', err)
                   } finally {
