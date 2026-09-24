@@ -82,48 +82,43 @@ export async function fetchSnapshots(
   from.setDate(from.getDate() - days)
   const fromStr = from.toISOString().split('T')[0]
 
-  // 1. İlgili portföy(ler) için tarih aralığı filtreli sorgu
-  if (ids.length > 0) {
-    let query = supabase
-      .from('portfolio_snapshots')
-      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
+  try {
+    if (ids.length > 0) {
+      let query = supabase
+        .from('portfolio_snapshots')
+        .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
 
-    if (ids.length === 1) {
-      query = query.eq('portfolio_id', ids[0])
-    } else {
-      query = query.in('portfolio_id', ids)
+      if (ids.length === 1) {
+        query = query.eq('portfolio_id', ids[0])
+      } else {
+        query = query.in('portfolio_id', ids)
+      }
+
+      const { data, error } = await query
+        .gte('snapshot_date', fromStr)
+        .order('snapshot_date', { ascending: true })
+
+      if (error) {
+        console.error('fetchSnapshots primary query error:', error)
+      } else if (data && data.length > 0) {
+        return deduplicateSnapshots(data as SnapshotData[])
+      }
     }
 
-    const { data } = await query
+    // Fallback: RLS scoped data
+    const { data: userScopedData, error: userError } = await supabase
+      .from('portfolio_snapshots')
+      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
       .gte('snapshot_date', fromStr)
       .order('snapshot_date', { ascending: true })
 
-    // Eğer sağlanan ID'ler için en az 2 snapshot bulunduysa dön
-    if (data && data.length >= 2) {
-      return deduplicateSnapshots(data as SnapshotData[])
+    if (userError) {
+      console.error('fetchSnapshots fallback query error:', userError)
+    } else if (userScopedData && userScopedData.length > 0) {
+      return deduplicateSnapshots(userScopedData as SnapshotData[])
     }
-  }
-
-  // 2. Eğer ids ile yeterli veri bulunamadıysa (örneğin sadece 1 gün bulundu veya yanlış/boş portföy ID'si geçildiyse),
-  // RLS kapsamında kullanıcının oturumuna ait bu aralıktaki TÜM snapshot'ları getir
-  const { data: userScopedData } = await supabase
-    .from('portfolio_snapshots')
-    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
-    .gte('snapshot_date', fromStr)
-    .order('snapshot_date', { ascending: true })
-
-  if (userScopedData && userScopedData.length > 0) {
-    return deduplicateSnapshots(userScopedData as SnapshotData[])
-  }
-
-  // 3. Tarih kısıtı olmaksızın kullanıcının erişebildiği TÜM snapshot'ları getir
-  const { data: allHistorical } = await supabase
-    .from('portfolio_snapshots')
-    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
-    .order('snapshot_date', { ascending: true })
-
-  if (allHistorical && allHistorical.length > 0) {
-    return deduplicateSnapshots(allHistorical as SnapshotData[])
+  } catch (err) {
+    console.error('fetchSnapshots unexpected error:', err)
   }
 
   return []
