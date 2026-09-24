@@ -43,8 +43,13 @@ const Assets = () => {
   const [txRateNotFound, setTxRateNotFound] = useState(false)
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
-  const [txError, setTxError] = useState('')
   const [creditCashOnSell, setCreditCashOnSell] = useState(true)
+  const [deductCashOnBuy, setDeductCashOnBuy] = useState(true)
+  const [deductCashOnNewAsset, setDeductCashOnNewAsset] = useState(true)
+
+  const activePid = portfolioId || contextPortfolioId
+  const cashAsset = assets.find((a: any) => a.portfolio_id === activePid && a.type === 'nakit')
+  const availableCash = cashAsset ? Number(cashAsset.quantity || 0) : 0
   
   const { executeSearch: executeAddSearch, searchResults, setSearchResults, searching } = useAssetSearch()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -185,7 +190,25 @@ const Assets = () => {
         await addTransaction(asset.id, 'buy', Number(form.quantity), Number(form.avg_cost), form.txDate)
       }
     }
-    setSuccess('Varlık başarıyla eklendi!')
+
+    // Yeni varlık alımında tutarı Nakit hesabından düş
+    let newAssetCashNotice = ''
+    if (!isManual && deductCashOnNewAsset && form.quantity && form.avg_cost) {
+      const isUsdType = isUSD(form.type)
+      const currentRate = prices['USDTRY=X'] || (form.manualRate ? Number(form.manualRate) : 34)
+      const costTRY = isUsdType ? Number(form.avg_cost) * Number(form.quantity) * currentRate : Number(form.avg_cost) * Number(form.quantity)
+      if (costTRY > 0) {
+        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+        if (cashAsset) {
+          const currentQty = Number(cashAsset.quantity || 0)
+          const newQty = Math.round((currentQty - costTRY) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+          newAssetCashNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+        }
+      }
+    }
+
+    setSuccess(`Varlık başarıyla eklendi!${newAssetCashNotice}`)
     setForm({ type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '', interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0], txDate: new Date().toISOString().split('T')[0], manualRate: '', strategy: 'Core', sector: '' })
     setRateNotFound(false)
     setShowForm(false)
@@ -258,6 +281,7 @@ const Assets = () => {
     setTxAsset(asset)
     setTxType('buy')
     setCreditCashOnSell(true)
+    setDeductCashOnBuy(true)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
     setTxRateNotFound(false)
     setTxError('')
@@ -316,6 +340,22 @@ const Assets = () => {
       }
     }
 
+    // Alım yapıldığında tutarı Nakit hesabından düş
+    let cashDeductedNotice = ''
+    if (txType === 'buy' && deductCashOnBuy) {
+      const costTRY = tryTotal || (finalPrice * Number(txForm.quantity))
+      if (costTRY > 0) {
+        const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+        if (cashAsset) {
+          const currentQty = Number(cashAsset.quantity || 0)
+          const newQty = Math.round((currentQty - costTRY) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+          cashDeductedNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+        }
+      }
+    }
+
     const history = await fetchTransactions(txAsset.id)
     setTxHistory(history)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
@@ -323,7 +363,7 @@ const Assets = () => {
     setTxSaving(false)
     fetchData()
     refresh(true)
-    setSuccess(`İşlem kaydedildi!${cashCreditedNotice}`)
+    setSuccess(`İşlem kaydedildi!${cashCreditedNotice}${cashDeductedNotice}`)
     setTimeout(() => setSuccess(''), 3000)
   }
 
@@ -561,6 +601,35 @@ const Assets = () => {
               <label style={labelStyle}>Not (opsiyonel)</label>
               <input type="text" value={txForm.note} onChange={e => setTxForm({ ...txForm, note: e.target.value })} placeholder="Örn: Uzun vadeli alım" style={inputStyle} />
             </div>
+            {txType === 'buy' && (
+              <div style={{
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="checkbox"
+                    id="deductCashBuy"
+                    checked={deductCashOnBuy}
+                    onChange={e => setDeductCashOnBuy(e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="deductCashBuy" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
+                    💰 Alım tutarını <strong>Nakit</strong> hesabımdan düş
+                  </label>
+                </div>
+                <span style={{ fontSize: '11px', color: availableCash > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                  Nakit: ₺{Math.round(availableCash).toLocaleString('tr-TR')}
+                </span>
+              </div>
+            )}
             {txType === 'sell' && (
               <div style={{
                 background: 'var(--bg-elevated)',
@@ -817,6 +886,35 @@ const Assets = () => {
                 </div>
               </div>
             )
+          )}
+          {!isManual && (
+            <div style={{
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              marginBottom: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="checkbox"
+                  id="deductCashNewAsset"
+                  checked={deductCashOnNewAsset}
+                  onChange={e => setDeductCashOnNewAsset(e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                <label htmlFor="deductCashNewAsset" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
+                  💰 Alım tutarını <strong>Nakit</strong> hesabımdan düş
+                </label>
+              </div>
+              <span style={{ fontSize: '11px', color: availableCash > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                Nakit: ₺{Math.round(availableCash).toLocaleString('tr-TR')}
+              </span>
+            </div>
           )}
           {error && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{error}</div>}
           <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: '13px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: saving ? 0.7 : 1, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
