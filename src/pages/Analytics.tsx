@@ -80,21 +80,6 @@ const Analytics = () => {
     }
   }, [range, portfolioId, allPortfolioIds, ctxPortfolioIds, assets, loading, prices])
 
-  useEffect(() => {
-    if (assets.length > 0 && expandedAssetGroups.size === 0) {
-      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
-      const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
-      const groups: Record<string, any[]> = {}
-      filtered.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
-      const sorted = Object.entries(groups).sort((a, b) => {
-        const sumValue = (items: any[]) => items.reduce((s, asset) => {
-          return s + getCurrentValue(asset, prices, usdRateLocal)
-        }, 0)
-        return sumValue(b[1]) - sumValue(a[1])
-      })
-      if (sorted.length > 0) setExpandedAssetGroups(new Set([sorted[0][0]]))
-    }
-  }, [assets, prices])
 
   const fetchExtra = async () => {
     if (!user) return
@@ -315,18 +300,110 @@ const Analytics = () => {
             ) : (
               sortedGroupEntries.map(([type, items]) => {
                 const isExpanded = expandedAssetGroups.has(type)
+                
+                let groupCost = 0
+                let groupValue = 0
+                items.forEach((asset: any) => {
+                  groupValue += getCurrentValue(asset, prices, usdRate)
+                  groupCost += getCostValue(asset, usdRate)
+                })
+                const groupGain = groupValue - groupCost
+                const groupGainPct = groupCost > 0 ? (groupGain / groupCost) * 100 : 0
+                const hasProfitData = groupCost > 0
+
                 return (
-                <div key={type} style={{ ...card, marginBottom: '12px', borderLeft: `3px solid ${TYPE_COLORS[type] || '#6b7280'}` }}>
-                  <div onClick={() => {
+                <div key={type} style={{
+                  ...card,
+                  marginBottom: '12px',
+                  borderLeft: `4px solid ${TYPE_COLORS[type] || '#6b7280'}`,
+                  padding: isExpanded ? '16px 16px 14px 16px' : '14px 16px',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div
+                    onClick={() => {
                       const next = new Set(expandedAssetGroups)
                       if (next.has(type)) next.delete(type); else next.add(type)
                       setExpandedAssetGroups(next)
                     }}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: isExpanded ? '14px' : 0 }}>
-                    <p style={{ fontWeight: '800', fontSize: '11px', color: TYPE_COLORS[type] || '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                      {ASSET_LABELS[type] || type} · {items.length} varlık
-                    </p>
-                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      paddingBottom: isExpanded ? '12px' : '0',
+                      borderBottom: isExpanded ? '1px solid var(--border-light)' : 'none',
+                      marginBottom: isExpanded ? '12px' : '0'
+                    }}
+                  >
+                    <div>
+                      <p style={{
+                        fontWeight: '800',
+                        fontSize: '12px',
+                        color: TYPE_COLORS[type] || '#6b7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.6px',
+                        margin: 0
+                      }}>
+                        {ASSET_LABELS[type] || type}
+                        <span style={{
+                          fontSize: '11px',
+                          color: 'var(--text-tertiary)',
+                          fontWeight: '600',
+                          marginLeft: '6px'
+                        }}>
+                          ({items.length})
+                        </span>
+                      </p>
+                      <p style={{
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: 'var(--text-primary)',
+                        marginTop: '3px',
+                        margin: 0
+                      }}>
+                        {fc(groupValue)}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {hasProfitData ? (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            color: groupGain >= 0 ? '#10b981' : '#ef4444',
+                            background: groupGain >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                            padding: '2px 7px',
+                            borderRadius: '10px'
+                          }}>
+                            <span>{groupGain >= 0 ? '▲' : '▼'}</span>
+                            <span>{groupGain >= 0 ? '+' : ''}{groupGainPct.toFixed(2)}%</span>
+                          </div>
+                          <p style={{
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            color: groupGain >= 0 ? '#10b981' : '#ef4444',
+                            marginTop: '2px',
+                            margin: 0
+                          }}>
+                            {isHidden ? '••••••' : `${groupGain >= 0 ? '+' : '-'}₺${Math.round(Math.abs(groupGain)).toLocaleString('tr-TR')}`}
+                          </p>
+                        </div>
+                      ) : null}
+                      <span style={{
+                        fontSize: '12px',
+                        color: 'var(--text-tertiary)',
+                        fontWeight: '800',
+                        transition: 'transform 0.2s',
+                        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        marginLeft: '4px'
+                      }}>
+                        ▾
+                      </span>
+                    </div>
                   </div>
 
                   {isExpanded && (type === 'usd_hisse' || type === 'hisse') ? (() => {
@@ -451,7 +528,7 @@ const Analytics = () => {
                       : `₺${livePrice.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
 
                     return (
-                      <div key={asset.id} style={{ marginBottom: index < items.length - 1 ? '16px' : 0, paddingBottom: index < items.length - 1 ? '16px' : 0, borderBottom: index < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div key={asset.id} style={{ marginBottom: index < items.length - 1 ? '16px' : 0, paddingBottom: index < items.length - 1 ? '16px' : 0, borderBottom: index < items.length - 1 ? '1px solid var(--border)' : 'none', paddingTop: index === 0 ? '4px' : 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                             <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
