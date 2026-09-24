@@ -43,6 +43,7 @@ const Assets = () => {
   const [txRateNotFound, setTxRateNotFound] = useState(false)
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
+  const [txError, setTxError] = useState('')
   const [creditCashOnSell, setCreditCashOnSell] = useState(true)
   const [deductCashOnBuy, setDeductCashOnBuy] = useState(true)
   const [deductCashOnNewAsset, setDeductCashOnNewAsset] = useState(true)
