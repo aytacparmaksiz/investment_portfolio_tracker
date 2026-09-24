@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { isUSD } from '../lib/calculations'
+import { isUSD, getCurrentValue, getCostValue } from '../lib/calculations'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions, deleteTransaction, syncInitialTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS } from '../lib/constants'
+import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE } from '../lib/constants'
 import { useAssetSearch } from '../hooks/useAssetSearch'
 
 const Assets = () => {
@@ -937,56 +937,146 @@ const Assets = () => {
           return Object.entries(groups).map(([type, items]) => {
             const typeColor = TYPE_COLORS[type] || '#6b7280'
             const isExpanded = expandedGroups.has(type)
-          
+            const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
+
+            // Grup toplam değer, maliyet ve kâr/zarar hesaplamaları
+            const groupTotalValue = items.reduce((sum, asset) => sum + getCurrentValue(asset, prices, usdRate), 0)
+            const groupTotalCost = items.reduce((sum, asset) => sum + getCostValue(asset, usdRate), 0)
+            const groupProfit = groupTotalValue - groupTotalCost
+            const groupProfitPct = groupTotalCost > 0 ? (groupProfit / groupTotalCost) * 100 : 0
+            const hasProfitData = type !== 'nakit' && groupTotalCost > 0
+
             return (
-              <div key={type} style={{ marginBottom: '12px' }}>
-                <div onClick={() => toggleGroup(type)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: isExpanded ? '10px' : '0', padding: '10px 0', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor }} />
-                    <p style={{ fontWeight: '700', fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {ASSET_LABELS[type]} · {items.length}
-                    </p>
+              <div key={type} style={{ marginBottom: '12px', border: '1px solid var(--border-light)', borderRadius: '12px', overflow: 'hidden' }}>
+                <div onClick={() => toggleGroup(type)} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                  background: isExpanded ? 'var(--bg-elevated)' : 'transparent',
+                  transition: 'background 0.2s'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: typeColor, flexShrink: 0 }} />
+                    <div>
+                      <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.4px', margin: 0 }}>
+                        {ASSET_LABELS[type] || type}
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: '600', marginLeft: '6px' }}>
+                          ({items.length})
+                        </span>
+                      </p>
+                      <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginTop: '2px', margin: 0 }}>
+                        {isHidden ? '••••••' : `₺${Math.round(groupTotalValue).toLocaleString('tr-TR')}`}
+                      </p>
+                    </div>
                   </div>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: '700' }}>{isExpanded ? '▲' : '▼'}</span>
-                </div>
 
-                {isExpanded && items.map((asset: any, index: number) => {
-                  const isManualAsset = ['bes', 'vadeli', 'nakit'].includes(asset.type)
-                  const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
-                  const manualDisplayValue = asset.type === 'nakit'
-                      ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1)
-                      : Number(lastValue || asset.principal || 0)
-
-                  return (
-                    <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                      <div>
-                        <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
-                        <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
-                          {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
-                          {!isManualAsset && ` · ${isHidden ? '••••••' : asset.quantity} adet`}
-                          {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}`}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {hasProfitData ? (
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          color: groupProfit >= 0 ? '#10b981' : '#ef4444',
+                          background: groupProfit >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                          padding: '2px 7px',
+                          borderRadius: '12px'
+                        }}>
+                          <span>{groupProfit >= 0 ? '▲' : '▼'}</span>
+                          <span>{groupProfit >= 0 ? '+' : ''}{groupProfitPct.toFixed(2)}%</span>
+                        </div>
+                        <p style={{
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          color: groupProfit >= 0 ? '#10b981' : '#ef4444',
+                          marginTop: '2px',
+                          margin: 0
+                        }}>
+                          {isHidden ? '••••••' : `${groupProfit >= 0 ? '+' : ''}₺${Math.round(groupProfit).toLocaleString('tr-TR')}`}
                         </p>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isManualAsset && manualDisplayValue > 0 && (
-                          <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
-                            {isHidden ? '••••••' : `₺${Number(manualDisplayValue).toLocaleString('tr-TR')}`}
-                          </p>
-                        )}
-                        {isManualAsset && (
-                          <button onClick={() => openManualUpdateModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Güncelle</button>
-                        )}
-                        {!isManualAsset && (
-                          <>
-                            <button onClick={() => openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
-                            <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
-                          </>
-                        )}
-                        <button onClick={() => handleDelete(asset.id)} style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '8px', color: 'var(--red)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Sil</button>
+                    ) : type === 'nakit' ? (
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: 'var(--text-tertiary)',
+                          background: 'var(--bg-elevated)',
+                          padding: '3px 8px',
+                          borderRadius: '8px'
+                        }}>
+                          Nakit
+                        </span>
                       </div>
-                    </div>
-                  )
-                })}
+                    ) : null}
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: '800', marginLeft: '4px' }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div style={{ padding: '0 14px 10px 14px' }}>
+                    {items.map((asset: any, index: number) => {
+                      const isManualAsset = ['bes', 'vadeli', 'nakit'].includes(asset.type)
+                      const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
+                      const manualDisplayValue = asset.type === 'nakit'
+                          ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1)
+                          : Number(lastValue || asset.principal || 0)
+
+                      const assetVal = getCurrentValue(asset, prices, usdRate)
+                      const assetCost = getCostValue(asset, usdRate)
+                      const assetProfit = assetVal - assetCost
+                      const assetProfitPct = assetCost > 0 ? (assetProfit / assetCost) * 100 : 0
+
+                      return (
+                        <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                          <div>
+                            <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)', margin: 0 }}>{asset.name}</p>
+                            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px', margin: 0 }}>
+                              {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
+                              {!isManualAsset && ` · ${isHidden ? '••••••' : asset.quantity} adet`}
+                              {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}`}
+                            </p>
+                            {!isManualAsset && (
+                              <p style={{ fontSize: '11px', marginTop: '3px', fontWeight: '600', margin: 0 }}>
+                                <span style={{ color: 'var(--text-primary)' }}>
+                                  {isHidden ? '••••••' : `₺${Math.round(assetVal).toLocaleString('tr-TR')}`}
+                                </span>
+                                {assetCost > 0 && (
+                                  <span style={{ color: assetProfit >= 0 ? '#10b981' : '#ef4444', marginLeft: '6px' }}>
+                                    {isHidden ? '••••••' : `${assetProfit >= 0 ? '+' : ''}₺${Math.round(assetProfit).toLocaleString('tr-TR')} (${assetProfit >= 0 ? '+' : ''}${assetProfitPct.toFixed(2)}%)`}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {isManualAsset && manualDisplayValue > 0 && (
+                              <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
+                                {isHidden ? '••••••' : `₺${Number(manualDisplayValue).toLocaleString('tr-TR')}`}
+                              </p>
+                            )}
+                            {isManualAsset && (
+                              <button onClick={() => openManualUpdateModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Güncelle</button>
+                            )}
+                            {!isManualAsset && (
+                              <>
+                                <button onClick={() => openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
+                                <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
+                              </>
+                            )}
+                            <button onClick={() => handleDelete(asset.id)} style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '8px', color: 'var(--red)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Sil</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })
