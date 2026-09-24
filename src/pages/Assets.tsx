@@ -44,6 +44,7 @@ const Assets = () => {
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
   const [txError, setTxError] = useState('')
+  const [creditCashOnSell, setCreditCashOnSell] = useState(true)
   
   const { executeSearch: executeAddSearch, searchResults, setSearchResults, searching } = useAssetSearch()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -256,6 +257,7 @@ const Assets = () => {
   const openTxModal = async (asset: any) => {
     setTxAsset(asset)
     setTxType('buy')
+    setCreditCashOnSell(true)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
     setTxRateNotFound(false)
     setTxError('')
@@ -288,6 +290,32 @@ const Assets = () => {
     }
     const { error } = await addTransaction(txAsset.id, txType, Number(txForm.quantity), finalPrice, txForm.date, txForm.note, tryRate, tryTotal)
     if (error) { setTxError('Hata: ' + error.message); setTxSaving(false); return }
+
+    // Satış tutarını otomatik Nakit hesabına aktar
+    let cashCreditedNotice = ''
+    if (txType === 'sell' && creditCashOnSell) {
+      const proceedsTRY = tryTotal || (finalPrice * Number(txForm.quantity))
+      if (proceedsTRY > 0) {
+        const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+        if (cashAsset) {
+          const currentQty = Number(cashAsset.quantity || 0)
+          const newQty = Math.round((currentQty + proceedsTRY) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+        } else if (targetPid) {
+          await supabase.from('assets').insert({
+            portfolio_id: targetPid,
+            name: 'Nakit (TL)',
+            symbol: 'TL',
+            type: 'nakit',
+            quantity: Math.round(proceedsTRY * 100) / 100,
+            avg_cost: 1
+          })
+        }
+        cashCreditedNotice = ` (₺${Math.round(proceedsTRY).toLocaleString('tr-TR')} nakite aktarıldı)`
+      }
+    }
+
     const history = await fetchTransactions(txAsset.id)
     setTxHistory(history)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
@@ -295,7 +323,7 @@ const Assets = () => {
     setTxSaving(false)
     fetchData()
     refresh(true)
-    setSuccess('İşlem kaydedildi!')
+    setSuccess(`İşlem kaydedildi!${cashCreditedNotice}`)
     setTimeout(() => setSuccess(''), 3000)
   }
 
@@ -533,6 +561,29 @@ const Assets = () => {
               <label style={labelStyle}>Not (opsiyonel)</label>
               <input type="text" value={txForm.note} onChange={e => setTxForm({ ...txForm, note: e.target.value })} placeholder="Örn: Uzun vadeli alım" style={inputStyle} />
             </div>
+            {txType === 'sell' && (
+              <div style={{
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <input
+                  type="checkbox"
+                  id="creditCash"
+                  checked={creditCashOnSell}
+                  onChange={e => setCreditCashOnSell(e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                <label htmlFor="creditCash" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
+                  💰 Satış tutarını otomatik <strong>Nakit</strong> hesabına aktar
+                </label>
+              </div>
+            )}
             {txError && (
               <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>
                 {txError}

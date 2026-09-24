@@ -242,6 +242,8 @@ const Analytics = () => {
   const totalGain = last - first
   const totalGainPct = first > 0 ? (totalGain / first) * 100 : 0
   const latestProfit = Number(chartData[chartData.length - 1]?.kar || 0)
+  const latestCost = Number(chartData[chartData.length - 1]?.maliyet || 0)
+  const currentRoiPct = latestCost > 0 ? (latestProfit / latestCost) * 100 : 0
 
   // Benchmark Grafiği verisi (tüm geçerli noktalar)
   const benchmarkData = chartData.filter(d => d.qqqmDeger > 0)
@@ -593,7 +595,29 @@ const Analytics = () => {
 
               {/* GRAFİK 1: Tüm Servet Büyümesi (BES Dahil) */}
               <div style={{ ...card, marginBottom: '16px' }}>
-                <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '16px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {ranges.find(r => r.value === range)?.label || ''} dönem değişimi
+                    </p>
+                  </div>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    border: `1px solid ${totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                    color: totalGainPct >= 0 ? '#10b981' : '#ef4444',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}>
+                    <span>{totalGainPct >= 0 ? '▲' : '▼'}</span>
+                    <span>{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</span>
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={chartData}>
                     <defs>
@@ -613,9 +637,31 @@ const Analytics = () => {
 
               {/* GRAFİK 2: Tüm Servet Kar/Zarar */}
               <div style={{ ...card, marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px' }}>
-                  <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Kar/Zarar Performansı</p>
-                  <span title="Bu grafiğe BES performansı dahildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Kar/Zarar Performansı</p>
+                      <span title="Bu grafiğe BES performansı dahildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      Net getiri oranı
+                    </p>
+                  </div>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: currentRoiPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    border: `1px solid ${currentRoiPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                    color: currentRoiPct >= 0 ? '#10b981' : '#ef4444',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}>
+                    <span>{currentRoiPct >= 0 ? '▲' : '▼'}</span>
+                    <span>{currentRoiPct >= 0 ? '+' : ''}{currentRoiPct.toFixed(2)}%</span>
+                  </div>
                 </div>
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={chartData}>
