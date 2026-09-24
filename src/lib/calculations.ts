@@ -1,5 +1,5 @@
-import type { Asset } from '../types';
-import { FALLBACK_USD_RATE } from './constants';
+import type { Asset } from '../types/index.ts';
+import { FALLBACK_USD_RATE } from './constants.ts';
 
 export const isUSD = (type: string): boolean => {
   return ['usd_hisse', 'kripto', 'etf'].includes(type);

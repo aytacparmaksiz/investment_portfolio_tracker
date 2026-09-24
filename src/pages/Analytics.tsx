@@ -160,11 +160,21 @@ const Analytics = () => {
 
       let effectiveData = data
 
-      // KULLANICI TALEBİ / GERÇEK VERİ KORUMA:
-      // Supabase'de portföyün toplam değeri ve maliyeti için kayıtlı günlük snapshot'lar varsa (data.length > 0),
-      // bu verileri doğrudan kullan ve KESİNLİKLE sentetik normalizasyon ile EZME!
-      // Yalnızca ve yalnızca veritabanında hiç snapshot yoksa (sıfır kullanıcı) geçmişi simüle et.
-      if (data.length === 0 && activeAssets.length > 0) {
+      // KULLANICI TALEBİ / GÜNLÜK HAREKET VE GERÇEK VERİ KORUMA:
+      // Eğer Supabase'de aralık için yeterli sıklıkta günlük veri yoksa (sparse) veya
+      // ardışık günler arasında 3 günden uzun boşluklar varsa (gaps),
+      // var olan DB snapshot'larını birebir anchor olarak koruyarak piyasa hareketlerine göre
+      // aradaki günleri tam zaman serisi olarak oluştur ve veritabanına kaydet.
+      const minPointsNeeded = Math.min(Math.round(days * 0.7), 20)
+      const isSparse = data.length < minPointsNeeded
+      const hasLargeGap = data.length > 1 && data.some((item, i) => {
+        if (i === 0) return false
+        const prevDate = new Date(data[i - 1].snapshot_date).getTime()
+        const currDate = new Date(item.snapshot_date).getTime()
+        return (currDate - prevDate) > 3 * 86400000
+      })
+
+      if ((isSparse || hasLargeGap) && activeAssets.length > 0) {
         const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
 
@@ -196,13 +206,13 @@ const Analytics = () => {
           existingSnapshots: data,
           fromDate,
           toDate: todayStr,
-          firstTxDate: initDate || earliestActiveDate,
-          initialCost: initCost || localCurrentTotalCost
+          firstTxDate: initDate || data[0]?.snapshot_date || earliestActiveDate,
+          initialCost: initCost || (data[0] ? Number(data[0].total_cost) : localCurrentTotalCost)
         })
 
-        // Sadece sıfır snapshot varsa arka planda eksik kayıtları veritabanına kaydet
+        // Eksik/yeniden oluşturulan günleri arka planda Supabase'e kaydet
         const targetPid = Array.isArray(pidOrPids) ? pidOrPids[0] : pidOrPids
-        if (targetPid && data.length === 0) {
+        if (targetPid && effectiveData.length > 0) {
           batchSaveSnapshots(targetPid, effectiveData).catch(e => console.warn('Background backfill error:', e))
         }
       }

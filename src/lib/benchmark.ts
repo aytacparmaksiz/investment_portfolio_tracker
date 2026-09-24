@@ -135,7 +135,12 @@ export function buildBenchmarkSeries(
   let activeRatio = 1;
   let costRatio = 1;
 
-  if (firstValid) {
+  if (besDeduction && (besDeduction.value > 0 || besDeduction.cost > 0) && sortedSnaps[0]?.total_value > 0) {
+    const tv = sortedSnaps[0].total_value;
+    const tc = sortedSnaps[0].total_cost || tv;
+    activeRatio = Math.min(1, Math.max(0.05, (tv - (besDeduction.value || 0)) / tv));
+    costRatio = Math.min(1, Math.max(0.05, (tc - (besDeduction.cost || 0)) / tc));
+  } else if (firstValid) {
     const fvTotalV = Number(firstValid.total_value || 0);
     const fvPerfV = Number(firstValid.performance_value || 0);
     if (fvTotalV > 0 && fvPerfV > 0) {
@@ -219,12 +224,18 @@ export function buildBenchmarkSeries(
     let activeV: number;
     let activeC: number;
 
-    if (s.performance_value != null && Number(s.performance_value) > 0) {
+    const hasPerf = s.performance_value != null && Number(s.performance_value) > 0;
+    const userHasBES = besDeduction && (besDeduction.value > 0 || besDeduction.cost > 0);
+    // If performance_value was recorded but is basically identical to total_value (historical unseparated data),
+    // and the user has BES, treat it as containing BES and deduct BES.
+    const perfHasBES = userHasBES && hasPerf && totalV > 0 && Number(s.performance_value) >= totalV * 0.95;
+
+    if (hasPerf && !perfHasBES) {
       activeV = Number(s.performance_value);
       activeC = (s.performance_cost != null && Number(s.performance_cost) > 0)
         ? Number(s.performance_cost)
         : (totalC > 0 && firstValid ? Math.round(totalC * costRatio) : totalC);
-    } else if (besDeduction && (besDeduction.value > 0 || besDeduction.cost > 0)) {
+    } else if (userHasBES) {
       activeV = Math.max(0, totalV - (besDeduction.value || 0));
       activeC = Math.max(0, totalC - (besDeduction.cost || 0));
     } else if (firstValid && Number(firstValid.performance_value) > 0) {

@@ -1,6 +1,6 @@
 import type { Asset } from '../types/index.ts'
 import { FALLBACK_USD_RATE } from './constants.ts'
-import { isPerformanceAsset, getCostValue } from './calculations.ts'
+import { isPerformanceAsset, getCostValue, getCurrentValue } from './calculations.ts'
 import { fetchHistoricalPrices } from './comparison.ts'
 import { findClosestPrice, type SnapshotRecord } from './benchmark.ts'
 import { supabase } from './supabase.ts'
@@ -244,9 +244,11 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
   const liveUsdRate = livePrices['USDTRY=X'] || FALLBACK_USD_RATE
   const usdSeries = priceMaps['USDTRY=X'] || []
 
-  // Güncel aktif ve toplam portföy maliyetini hesapla
+  // Güncel aktif ve toplam portföy maliyeti ve piyasa değerini hesapla
   const currentTotalCost = assets.reduce((sum, a) => sum + getCostValue(a, liveUsdRate), 0)
   const currentActiveCost = assets.filter(isPerformanceAsset).reduce((sum, a) => sum + getCostValue(a, liveUsdRate), 0)
+  const currentTotalVal = assets.reduce((sum, a) => sum + getCurrentValue(a, livePrices, liveUsdRate), 0)
+  const currentActiveVal = assets.filter(isPerformanceAsset).reduce((sum, a) => sum + getCurrentValue(a, livePrices, liveUsdRate), 0)
 
   // Var olan DB snapshot'larını tarih eşleşmesi için haritalandır
   const dbSnapMap = new Map<string, SnapshotData>()
@@ -254,78 +256,86 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     if (s.snapshot_date) dbSnapMap.set(s.snapshot_date, s)
   })
 
-  // Başlangıç maliyeti ve ara maliyet kilometre taşlarını (anchors) belirle
+  // Başlangıç maliyeti ve ara değer kilometre taşlarını (anchors) belirle
   const validDbSnaps = existingSnapshots
-    .filter(s => s && s.snapshot_date && Number(s.total_cost || 0) > 0)
+    .filter(s => s && s.snapshot_date && (Number(s.total_value || 0) > 0 || Number(s.total_cost || 0) > 0))
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
 
-  const earliestDb = validDbSnaps[0]
-  const firstDate = options.firstTxDate || earliestDb?.snapshot_date || fromDate
-  const initialCost = (options.initialCost && options.initialCost > 0)
-    ? options.initialCost
-    : (earliestDb ? Number(earliestDb.total_cost) : currentTotalCost)
+  const activeCostRatio = currentTotalCost > 0 ? currentActiveCost / currentTotalCost : 1
+  const activeValRatio = currentTotalVal > 0 ? currentActiveVal / currentTotalVal : activeCostRatio
 
-  const activeRatio = currentTotalCost > 0 ? currentActiveCost / currentTotalCost : 1
-  const initialActiveCost = (earliestDb?.performance_cost != null && Number(earliestDb.performance_cost) > 0)
-    ? Number(earliestDb.performance_cost)
-    : Math.round(initialCost * activeRatio)
-
-  interface CostAnchor { date: string; cost: number; perfCost: number }
-  const rawAnchors: CostAnchor[] = []
-
-  if (firstDate && firstDate < toDate) {
-    rawAnchors.push({ date: firstDate, cost: initialCost, perfCost: initialActiveCost })
+  interface PortfolioAnchor {
+    date: string
+    value: number
+    cost: number
+    perfValue: number
+    perfCost: number
   }
 
+  const rawAnchors: PortfolioAnchor[] = []
+
+  // DB'deki mevcut snapshot'ları anchor olarak ekle
   validDbSnaps.forEach(s => {
-    if (s.snapshot_date > firstDate && s.snapshot_date < toDate) {
-      rawAnchors.push({
-        date: s.snapshot_date,
-        cost: Number(s.total_cost),
-        perfCost: Number(s.performance_cost || s.total_cost)
-      })
-    }
+    const val = Number(s.total_value || s.total_cost || 0)
+    const cost = Number(s.total_cost || s.total_value || 0)
+
+    const rawPerfVal = s.performance_value != null ? Number(s.performance_value) : null
+    const rawPerfCost = s.performance_cost != null ? Number(s.performance_cost) : null
+    const perfHasBES = rawPerfVal == null || (rawPerfVal >= val * 0.95 && currentActiveCost < currentTotalCost * 0.95)
+
+    const perfVal = (rawPerfVal != null && !perfHasBES)
+      ? rawPerfVal
+      : Math.round(val * activeValRatio)
+
+    const perfCost = (rawPerfCost != null && !perfHasBES)
+      ? rawPerfCost
+      : Math.round(cost * activeCostRatio)
+
+    rawAnchors.push({
+      date: s.snapshot_date,
+      value: val,
+      cost,
+      perfValue: perfVal,
+      perfCost
+    })
   })
 
-  rawAnchors.push({ date: toDate, cost: currentTotalCost, perfCost: currentActiveCost })
+  // Eğer firstDate en eski DB kaydından önceyse veya DB boşsa, başlangıç anchor'ı ekle
+  const earliestDb = validDbSnaps[0]
+  const firstDate = options.firstTxDate || (earliestDb ? earliestDb.snapshot_date : fromDate)
+  if (firstDate && (!earliestDb || firstDate < earliestDb.snapshot_date)) {
+    const initCost = (options.initialCost && options.initialCost > 0)
+      ? options.initialCost
+      : (earliestDb ? Number(earliestDb.total_cost) : currentTotalCost)
+    const initVal = earliestDb ? Number(earliestDb.total_value) : initCost
+    rawAnchors.push({
+      date: firstDate,
+      value: initVal,
+      cost: initCost,
+      perfValue: Math.round(initVal * activeValRatio),
+      perfCost: Math.round(initCost * activeCostRatio)
+    })
+  }
 
-  const anchorMap = new Map<string, CostAnchor>()
+  // Son gün (toDate / bugün) anchor'ı
+  rawAnchors.push({
+    date: toDate,
+    value: Math.round(currentTotalVal),
+    cost: Math.round(currentTotalCost),
+    perfValue: Math.round(currentActiveVal),
+    perfCost: Math.round(currentActiveCost)
+  })
+
+  // Tekilleştir ve tarihe göre sırala
+  const anchorMap = new Map<string, PortfolioAnchor>()
   rawAnchors.forEach(a => anchorMap.set(a.date, a))
   const anchors = Array.from(anchorMap.values()).sort((a, b) => a.date.localeCompare(b.date))
 
-  function getInterpolatedCost(targetDate: string): { cost: number; perfCost: number } {
-    if (anchors.length === 0) {
-      return { cost: currentTotalCost, perfCost: currentActiveCost }
-    }
-    if (targetDate <= anchors[0].date) {
-      return { cost: anchors[0].cost, perfCost: anchors[0].perfCost }
-    }
-    if (targetDate >= anchors[anchors.length - 1].date) {
-      const last = anchors[anchors.length - 1]
-      return { cost: last.cost, perfCost: last.perfCost }
-    }
-    for (let i = 0; i < anchors.length - 1; i++) {
-      const a1 = anchors[i]
-      const a2 = anchors[i + 1]
-      if (targetDate >= a1.date && targetDate <= a2.date) {
-        const t1 = new Date(a1.date).getTime()
-        const t2 = new Date(a2.date).getTime()
-        const tTarget = new Date(targetDate).getTime()
-        const factor = t2 > t1 ? Math.min(1, Math.max(0, (tTarget - t1) / (t2 - t1))) : 1
-        const cost = Math.round(a1.cost + factor * (a2.cost - a1.cost))
-        const perfCost = Math.round(a1.perfCost + factor * (a2.perfCost - a1.perfCost))
-        return { cost, perfCost }
-      }
-    }
-    return { cost: currentTotalCost, perfCost: currentActiveCost }
-  }
+  // 4. Her bir günün nominal piyasa değerini hesapla
+  const nominalMap: Record<string, { total: number; perf: number }> = {}
 
-  // 4. Her bir gün için portföy değerlerini piyasa hareketlerine göre hesapla
-  const result: SnapshotRecord[] = sortedDates.map(date => {
-    const existing = dbSnapMap.get(date)
+  sortedDates.forEach(date => {
     const currentUsdRate = findClosestPrice(usdSeries, date, liveUsdRate)
-
-    // Günün piyasa fiyatlarıyla varlıkların toplam değerini hesapla
     let nominalTotalVal = 0
     let nominalPerfVal = 0
 
@@ -340,32 +350,90 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
       }
     })
 
-    // Bu tarihteki kademeli sermaye maliyetini al
-    const { cost: targetCost, perfCost: targetPerfCost } = getInterpolatedCost(date)
+    nominalMap[date] = {
+      total: Math.max(1, nominalTotalVal),
+      perf: Math.max(1, nominalPerfVal)
+    }
+  })
 
-    let totalVal = Math.round(nominalTotalVal)
-    let perfVal = Math.round(nominalPerfVal)
-
-    // Veritabanında kayıtlı gerçek snapshot varsa (tarihi ne olursa olsun) birebir koru
-    if (existing && Number(existing.total_value) > 0) {
-      totalVal = Math.round(Number(existing.total_value))
-      perfVal = Math.round(Number(existing.performance_value ?? totalVal))
+  function getInterpolatedPoint(targetDate: string): { value: number; cost: number; perfValue: number; perfCost: number } {
+    if (anchors.length === 0) {
+      return {
+        value: currentTotalVal,
+        cost: currentTotalCost,
+        perfValue: currentActiveVal,
+        perfCost: currentActiveCost
+      }
+    }
+    if (targetDate <= anchors[0].date) {
+      const a = anchors[0]
+      return { value: a.value, cost: a.cost, perfValue: a.perfValue, perfCost: a.perfCost }
+    }
+    if (targetDate >= anchors[anchors.length - 1].date) {
+      const a = anchors[anchors.length - 1]
+      return { value: a.value, cost: a.cost, perfValue: a.perfValue, perfCost: a.perfCost }
     }
 
-    const finalCost = (existing && existing.total_cost != null && Number(existing.total_cost) > 0)
-      ? Math.round(Number(existing.total_cost))
-      : targetCost
+    for (let i = 0; i < anchors.length - 1; i++) {
+      const a1 = anchors[i]
+      const a2 = anchors[i + 1]
+      if (targetDate >= a1.date && targetDate <= a2.date) {
+        if (targetDate === a1.date) {
+          return { value: a1.value, cost: a1.cost, perfValue: a1.perfValue, perfCost: a1.perfCost }
+        }
+        if (targetDate === a2.date) {
+          return { value: a2.value, cost: a2.cost, perfValue: a2.perfValue, perfCost: a2.perfCost }
+        }
 
-    const finalPerfCost = (existing && existing.performance_cost != null && Number(existing.performance_cost) > 0)
-      ? Math.round(Number(existing.performance_cost))
-      : targetPerfCost
+        const t1 = new Date(a1.date).getTime()
+        const t2 = new Date(a2.date).getTime()
+        const tTarget = new Date(targetDate).getTime()
+        const factor = t2 > t1 ? Math.min(1, Math.max(0, (tTarget - t1) / (t2 - t1))) : 1
+
+        const cost = Math.round(a1.cost + factor * (a2.cost - a1.cost))
+        const perfCost = Math.round(a1.perfCost + factor * (a2.perfCost - a1.perfCost))
+        const baseVal = a1.value + factor * (a2.value - a1.value)
+        const basePerfVal = a1.perfValue + factor * (a2.perfValue - a1.perfValue)
+
+        // Günlük piyasa hareketine göre dalgalanma (market modulation)
+        const m1 = nominalMap[a1.date]?.total || 1
+        const m2 = nominalMap[a2.date]?.total || 1
+        const mTrend = m1 + factor * (m2 - m1)
+        const mCurr = nominalMap[targetDate]?.total || mTrend
+        const marketRatio = mTrend > 0 ? (mCurr / mTrend) : 1.0
+
+        const mPerf1 = nominalMap[a1.date]?.perf || 1
+        const mPerf2 = nominalMap[a2.date]?.perf || 1
+        const mPerfTrend = mPerf1 + factor * (mPerf2 - mPerf1)
+        const mPerfCurr = nominalMap[targetDate]?.perf || mPerfTrend
+        const marketPerfRatio = mPerfTrend > 0 ? (mPerfCurr / mPerfTrend) : 1.0
+
+        const value = Math.round(baseVal * marketRatio)
+        const perfValue = Math.round(basePerfVal * marketPerfRatio)
+
+        return { value, cost, perfValue, perfCost }
+      }
+    }
+
+    return {
+      value: currentTotalVal,
+      cost: currentTotalCost,
+      perfValue: currentActiveVal,
+      perfCost: currentActiveCost
+    }
+  }
+
+  // 5. Her gün için nihai sonuç dizisini oluştur
+  const result: SnapshotRecord[] = sortedDates.map(date => {
+    const existing = dbSnapMap.get(date)
+    const { value: targetVal, cost: targetCost, perfValue: targetPerfVal, perfCost: targetPerfCost } = getInterpolatedPoint(date)
 
     return {
       snapshot_date: date,
-      total_value: totalVal,
-      total_cost: finalCost,
-      performance_value: perfVal,
-      performance_cost: finalPerfCost,
+      total_value: targetVal,
+      total_cost: targetCost,
+      performance_value: targetPerfVal,
+      performance_cost: targetPerfCost,
       created_at: existing?.created_at || `${date}T12:00:00.000Z`
     }
   })
