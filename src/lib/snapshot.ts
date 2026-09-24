@@ -62,6 +62,8 @@ export async function saveSnapshot(
 }
 
 export interface SnapshotData {
+  id?: string
+  portfolio_id?: string
   snapshot_date: string
   total_value: number
   total_cost: number
@@ -71,10 +73,10 @@ export interface SnapshotData {
 }
 
 export async function fetchSnapshots(
-  portfolioIdOrIds: string | string[],
-  days: number = 90
+  portfolioIdOrIds?: string | string[],
+  days: number = 365
 ): Promise<SnapshotData[]> {
-  const ids = (Array.isArray(portfolioIdOrIds) ? portfolioIdOrIds : [portfolioIdOrIds]).filter(Boolean)
+  const ids = (Array.isArray(portfolioIdOrIds) ? portfolioIdOrIds : (portfolioIdOrIds ? [portfolioIdOrIds] : [])).filter(Boolean)
 
   const from = new Date()
   from.setDate(from.getDate() - days)
@@ -84,7 +86,7 @@ export async function fetchSnapshots(
   if (ids.length > 0) {
     let query = supabase
       .from('portfolio_snapshots')
-      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
+      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
 
     if (ids.length === 1) {
       query = query.eq('portfolio_id', ids[0])
@@ -92,39 +94,36 @@ export async function fetchSnapshots(
       query = query.in('portfolio_id', ids)
     }
 
-    const { data, error } = await query
+    const { data } = await query
       .gte('snapshot_date', fromStr)
       .order('snapshot_date', { ascending: true })
 
-    if (data && data.length > 0) {
+    // Eğer sağlanan ID'ler için en az 2 snapshot bulunduysa dön
+    if (data && data.length >= 2) {
       return deduplicateSnapshots(data as SnapshotData[])
-    }
-
-    // 2. Belirtilen gün aralığında bulunamadıysa portföyün tüm kayıtlarını çek
-    let allQuery = supabase
-      .from('portfolio_snapshots')
-      .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
-
-    if (ids.length === 1) {
-      allQuery = allQuery.eq('portfolio_id', ids[0])
-    } else {
-      allQuery = allQuery.in('portfolio_id', ids)
-    }
-
-    const { data: allData, error: allErr } = await allQuery.order('snapshot_date', { ascending: true })
-    if (allData && allData.length > 0) {
-      return deduplicateSnapshots(allData as SnapshotData[])
     }
   }
 
-  // 3. Son çare: RLS kapsamında kullanıcının oturumuna ait TÜM snapshot kayıtlarını getir
+  // 2. Eğer ids ile yeterli veri bulunamadıysa (örneğin sadece 1 gün bulundu veya yanlış/boş portföy ID'si geçildiyse),
+  // RLS kapsamında kullanıcının oturumuna ait bu aralıktaki TÜM snapshot'ları getir
   const { data: userScopedData } = await supabase
     .from('portfolio_snapshots')
-    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at')
+    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
+    .gte('snapshot_date', fromStr)
     .order('snapshot_date', { ascending: true })
 
   if (userScopedData && userScopedData.length > 0) {
     return deduplicateSnapshots(userScopedData as SnapshotData[])
+  }
+
+  // 3. Tarih kısıtı olmaksızın kullanıcının erişebildiği TÜM snapshot'ları getir
+  const { data: allHistorical } = await supabase
+    .from('portfolio_snapshots')
+    .select('snapshot_date, total_value, total_cost, performance_value, performance_cost, created_at, portfolio_id')
+    .order('snapshot_date', { ascending: true })
+
+  if (allHistorical && allHistorical.length > 0) {
+    return deduplicateSnapshots(allHistorical as SnapshotData[])
   }
 
   return []

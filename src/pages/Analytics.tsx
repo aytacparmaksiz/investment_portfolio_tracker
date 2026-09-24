@@ -14,7 +14,7 @@ import { useLocation } from 'react-router-dom'
 
 const Analytics = () => {
   const { user } = useAuth()
-  const { assets, prices, loading, portfolioId, refresh, isHidden } = usePortfolio()
+  const { assets, prices, loading, portfolioId, allPortfolioIds: ctxPortfolioIds, refresh, isHidden } = usePortfolio()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
   
@@ -74,11 +74,11 @@ const Analytics = () => {
   }, [user?.id])
 
   useEffect(() => { 
-    const pids = allPortfolioIds.length > 0 ? allPortfolioIds : (portfolioId ? [portfolioId] : [])
-    if (pids.length > 0 && !loading && assets.length > 0) {
+    const pids = allPortfolioIds.length > 0 ? allPortfolioIds : (ctxPortfolioIds && ctxPortfolioIds.length > 0 ? ctxPortfolioIds : (portfolioId ? [portfolioId] : []))
+    if (!loading && assets.length > 0) {
       loadSnapshots(pids, range, assets) 
     }
-  }, [range, portfolioId, allPortfolioIds, assets, loading, prices])
+  }, [range, portfolioId, allPortfolioIds, ctxPortfolioIds, assets, loading, prices])
 
   useEffect(() => {
     if (assets.length > 0 && expandedAssetGroups.size === 0) {
@@ -152,69 +152,61 @@ const Analytics = () => {
     }
     setSnapshotsLoading(true)
     try {
-      const data = await fetchSnapshots(pidOrPids, days)
+      // 365 gün (tüm yıllık geçmiş) çekilerek sekmeler arası (7G, 1A, 3A, 6A, 1Y) anlık geçiş ve baseline doğruluğu sağlanır
+      const data = await fetchSnapshots(pidOrPids, Math.max(days, 365))
       
+      // KULLANICI TALEBİ / GERÇEK VERİ KORUMA:
+      // Kullanıcının Supabase'de var olan 72+ gerçek günlük snapshot'ı doğrudan kullanılır.
+      // Kesinlikle yapay sentetik filtreler veya gap kontrolleri ile gerçek veritabanı kayıtları ezilmez.
+      if (data && data.length > 0) {
+        setSnapshots(data)
+        setSnapshotsLoading(false)
+        return
+      }
+
+      // SADECE ve SADECE veritabanında hiç snapshot kaydı bulunmayan sıfır kilometre yeni kullanıcılar için geçmiş simüle edilir
       const defaultRangeDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
       const todayStr = new Date().toISOString().split('T')[0]
       const fromDate = defaultRangeDate
+      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
 
-      let effectiveData = data
+      let initCost = initialTotalCost
+      let initActiveCost = initialActiveCost
+      let initDate = firstTxDate
 
-      // KULLANICI TALEBİ / GÜNLÜK HAREKET VE GERÇEK VERİ KORUMA:
-      // Eğer Supabase'de aralık için yeterli sıklıkta günlük veri yoksa (sparse) veya
-      // ardışık günler arasında 3 günden uzun boşluklar varsa (gaps),
-      // var olan DB snapshot'larını birebir anchor olarak koruyarak piyasa hareketlerine göre
-      // aradaki günleri tam zaman serisi olarak oluştur ve veritabanına kaydet.
-      const minPointsNeeded = Math.min(Math.round(days * 0.7), 20)
-      const isSparse = data.length < minPointsNeeded
-      const hasLargeGap = data.length > 1 && data.some((item, i) => {
-        if (i === 0) return false
-        const prevDate = new Date(data[i - 1].snapshot_date).getTime()
-        const currDate = new Date(item.snapshot_date).getTime()
-        return (currDate - prevDate) > 3 * 86400000
+      if (!initDate || initCost <= 0) {
+        const { data: snapData } = await supabase
+          .from('portfolio_snapshots')
+          .select('snapshot_date, total_cost, performance_cost')
+          .in('portfolio_id', Array.isArray(pidOrPids) ? pidOrPids : [pidOrPids])
+          .order('snapshot_date', { ascending: true })
+          .limit(1)
+
+        if (snapData && snapData.length > 0) {
+          initDate = snapData[0].snapshot_date
+          initCost = Number(snapData[0].total_cost)
+          initActiveCost = Number(snapData[0].performance_cost) || 0
+          setFirstTxDate(initDate)
+          setInitialTotalCost(initCost)
+          setInitialActiveCost(initActiveCost)
+        }
+      }
+
+      const effectiveData = await reconstructPortfolioHistory({
+        assets: activeAssets,
+        livePrices: prices,
+        existingSnapshots: [],
+        fromDate,
+        toDate: todayStr,
+        firstTxDate: initDate || earliestActiveDate,
+        initialCost: initCost > 0 ? initCost : localCurrentTotalCost
       })
 
-      if ((isSparse || hasLargeGap) && activeAssets.length > 0) {
-        const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
-        const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
-
-        let initCost = initialTotalCost
-        let initActiveCost = initialActiveCost
-        let initDate = firstTxDate
-
-        if (!initDate || initCost <= 0) {
-          const { data: snapData } = await supabase
-            .from('portfolio_snapshots')
-            .select('snapshot_date, total_cost, performance_cost')
-            .in('portfolio_id', Array.isArray(pidOrPids) ? pidOrPids : [pidOrPids])
-            .order('snapshot_date', { ascending: true })
-            .limit(1)
-
-          if (snapData && snapData.length > 0) {
-            initDate = snapData[0].snapshot_date
-            initCost = Number(snapData[0].total_cost)
-            initActiveCost = Number(snapData[0].performance_cost) || 0
-            setFirstTxDate(initDate)
-            setInitialTotalCost(initCost)
-            setInitialActiveCost(initActiveCost)
-          }
-        }
-
-        effectiveData = await reconstructPortfolioHistory({
-          assets: activeAssets,
-          livePrices: prices,
-          existingSnapshots: data,
-          fromDate,
-          toDate: todayStr,
-          firstTxDate: initDate || data[0]?.snapshot_date || earliestActiveDate,
-          initialCost: initCost || (data[0] ? Number(data[0].total_cost) : localCurrentTotalCost)
-        })
-
-        // Eksik/yeniden oluşturulan günleri arka planda Supabase'e kaydet
-        const targetPid = Array.isArray(pidOrPids) ? pidOrPids[0] : pidOrPids
-        if (targetPid && effectiveData.length > 0) {
-          batchSaveSnapshots(targetPid, effectiveData).catch(e => console.warn('Background backfill error:', e))
-        }
+      // Eksik/yeniden oluşturulan günleri arka planda Supabase'e kaydet
+      const targetPid = Array.isArray(pidOrPids) ? pidOrPids[0] : pidOrPids
+      if (targetPid && effectiveData.length > 0) {
+        batchSaveSnapshots(targetPid, effectiveData).catch(e => console.warn('Background backfill error:', e))
       }
 
       setSnapshots(effectiveData)

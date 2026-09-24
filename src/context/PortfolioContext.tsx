@@ -14,6 +14,7 @@ interface PortfolioContextType {
   pricesLoading: boolean
   lastUpdated: Date | null
   portfolioId: string | null
+  allPortfolioIds: string[]
   refresh: (force?: boolean) => Promise<void>
   resetPortfolio: () => void
   isHidden: boolean
@@ -30,6 +31,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [pricesLoading, setPricesLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [portfolioId, setPortfolioId] = useState<string | null>(null)
+  const [allPortfolioIds, setAllPortfolioIds] = useState<string[]>([])
   const [hasFetched, setHasFetched] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
@@ -42,6 +44,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     setAssets([])
     setPrices({})
     setPortfolioId(null)
+    setAllPortfolioIds([])
     setHasFetched(false)
     setLastUpdated(null)
     setLoading(true)
@@ -99,6 +102,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       ...userPortfolioIds,
       ...(memberPortfolios?.map((m: any) => m.portfolio_id) || [])
     ]
+    setAllPortfolioIds(allPortfolioIds)
 
     const { data: assetsData } = await supabase
       .from('assets')
@@ -154,7 +158,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 }, [user])
 
   return (
-    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, resetPortfolio, isHidden, setIsHidden }}>
+    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, resetPortfolio, isHidden, setIsHidden }}>
       {children}
     </PortfolioContext.Provider>
   )

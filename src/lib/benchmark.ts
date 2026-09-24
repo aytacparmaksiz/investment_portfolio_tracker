@@ -59,9 +59,17 @@ export function findClosestPrice(
   return chosen > 0 ? chosen : (livePrice && livePrice > 0 ? livePrice : 0);
 }
 
-export function deduplicateSnapshots<T extends { snapshot_date: string; performance_value?: number | null; performance_cost?: number | null; created_at?: string }>(
+export function deduplicateSnapshots<T extends { snapshot_date: string; portfolio_id?: string; performance_value?: number | null; performance_cost?: number | null; created_at?: string }>(
   data: T[]
 ): T[] {
+  // Portföy kimliklerinin sıklığını hesapla (baskın ana portföyü tespit etmek için)
+  const pidCounts = new Map<string, number>();
+  for (const s of data) {
+    if (s && s.portfolio_id) {
+      pidCounts.set(s.portfolio_id, (pidCounts.get(s.portfolio_id) || 0) + 1);
+    }
+  }
+
   const dateMap = new Map<string, T>();
 
   const toTime = (dateStr?: string) => {
@@ -76,6 +84,18 @@ export function deduplicateSnapshots<T extends { snapshot_date: string; performa
     const existing = dateMap.get(snap.snapshot_date);
     if (!existing) {
       dateMap.set(snap.snapshot_date, snap);
+      continue;
+    }
+
+    const existingCount = (existing.portfolio_id && pidCounts.get(existing.portfolio_id)) || 0;
+    const snapCount = (snap.portfolio_id && pidCounts.get(snap.portfolio_id)) || 0;
+
+    // Baskın portföy önceliği: Eğer bir portföy veri setinin ezici çoğunluğunu oluşturuyorsa (örn: 72 güne karşı 1 gün)
+    // aynı tarihte çakışma olduğunda asıl ana portföyün verisi korunur.
+    if (snapCount > existingCount * 2) {
+      dateMap.set(snap.snapshot_date, snap);
+      continue;
+    } else if (existingCount > snapCount * 2) {
       continue;
     }
 
@@ -186,11 +206,9 @@ export function buildBenchmarkSeries(
   // grafik çizgisinin oluşabilmesi için önceki güne maliyet tabanlı 1 başlangıç noktası ekle
   if (effectiveSnaps.length === 1) {
     const single = effectiveSnaps[0];
-    const baseDate = (rangeFromDate && rangeFromDate < single.snapshot_date)
-      ? rangeFromDate
-      : (firstTxDate && firstTxDate < single.snapshot_date
-          ? firstTxDate
-          : new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0]);
+    const baseDate = (firstTxDate && firstTxDate < single.snapshot_date)
+      ? firstTxDate
+      : new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
 
     const baseCost = single.total_cost > 0 ? single.total_cost : single.total_value;
     const basePerfCost = (single.performance_cost && single.performance_cost > 0)

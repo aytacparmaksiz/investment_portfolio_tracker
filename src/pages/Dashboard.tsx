@@ -3,6 +3,7 @@ import { FALLBACK_USD_RATE } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
+import { fetchSnapshots } from '../lib/snapshot'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
@@ -17,7 +18,7 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth()
-  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, refresh, isHidden, setIsHidden } = usePortfolio()
+  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, isHidden, setIsHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
   const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
@@ -36,39 +37,33 @@ const Dashboard = () => {
 
   useEffect(() => {
     const calcDaily = async () => {
-      if (!portfolioId) return
-  
-      const { data, error } = await supabase
-        .from('portfolio_snapshots')
-        .select('snapshot_date,total_value,total_cost,created_at')
-        .eq('portfolio_id', portfolioId)
-        .order('snapshot_date', { ascending: false })
-        .order('created_at', { ascending: false })
-  
-      if (error || !data || data.length < 2) return
-  
-      const latestDate = data[0].snapshot_date
-  
-      const latest = data.find(d => d.snapshot_date === latestDate)
-      const previous = data.find(d => d.snapshot_date !== latestDate)
-  
-      if (!latest || !previous) return
-  
-      const change =
-        (Number(latest.total_value) - Number(previous.total_value)) -
-        (Number(latest.total_cost || 0) - Number(previous.total_cost || 0))
-  
-      setDailyChange(change)
-  
-      setDailyChangePct(
-        Number(previous.total_value) > 0
-          ? (change / Number(previous.total_value)) * 100
-          : 0
-      )
+      const pids = (allPortfolioIds && allPortfolioIds.length > 0) ? allPortfolioIds : (portfolioId ? [portfolioId] : [])
+      if (pids.length === 0) return
+
+      try {
+        const data = await fetchSnapshots(pids, 30)
+        if (!data || data.length < 2) return
+
+        const latest = data[data.length - 1]
+        const previous = data[data.length - 2]
+
+        const change =
+          (Number(latest.total_value) - Number(previous.total_value)) -
+          (Number(latest.total_cost || 0) - Number(previous.total_cost || 0))
+
+        setDailyChange(change)
+        setDailyChangePct(
+          Number(previous.total_value) > 0
+            ? (change / Number(previous.total_value)) * 100
+            : 0
+        )
+      } catch (err) {
+        console.error('Error calculating daily change:', err)
+      }
     }
-  
+
     calcDaily()
-  }, [portfolioId, refreshing])
+  }, [portfolioId, allPortfolioIds, refreshing])
 
   const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
 

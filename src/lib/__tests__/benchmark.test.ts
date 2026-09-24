@@ -187,4 +187,42 @@ console.log('--- TEST SUITE: Streamlined Natural Snapshots & Benchmark ---\n')
   assert(result[15].total_cost > 180000 && result[15].total_cost < 235000, `Intermediate day cost smoothly progresses without cliffs (got ${result[15].total_cost})`)
 }
 
+// 8. Scenario: Real User Snapshots (75 raw DB records)
+{
+  const fs = await import('fs')
+  if (fs.existsSync('scratch_user_snapshots.json')) {
+    const rawSnaps = JSON.parse(fs.readFileSync('scratch_user_snapshots.json', 'utf8'))
+    rawSnaps.forEach((s: any) => {
+      s.total_value = Number(s.total_value)
+      s.total_cost = Number(s.total_cost)
+      s.performance_value = s.performance_value != null ? Number(s.performance_value) : null
+      s.performance_cost = s.performance_cost != null ? Number(s.performance_cost) : null
+    })
+
+    const deduped = deduplicateSnapshots(rawSnaps)
+    assert(deduped.length === 72, `Deduplicated count is exactly 72 unique daily points (got ${deduped.length})`)
+
+    // Dominant portfolio preference check for 2026-07-17
+    const snapJuly17 = deduped.find(s => s.snapshot_date === '2026-07-17')
+    assert(snapJuly17 && Math.round(Number(snapJuly17.total_value)) === 903250, `July 17 selected main portfolio value 903250 (got ${snapJuly17?.total_value})`)
+
+    const besDeduction = { value: 501376, cost: 263891 }
+
+    // 1A (30 days) series check
+    const range1M = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
+    const res1M = buildBenchmarkSeries(deduped, [], [], 304, 34.5, '2026-06-22', 784702, range1M, besDeduction)
+    assert(res1M.points.length === 25, `1A returns 25 distinct daily fluctuating points (got ${res1M.points.length})`)
+    assert(res1M.points[0].rawDate === '2026-08-25', `1A starts on 2026-08-25`)
+    assert(res1M.points[res1M.points.length - 1].rawDate === '2026-09-24', `1A ends on 2026-09-24`)
+
+    // 6A (180 days) series check
+    const range6M = new Date(Date.now() - 180 * 86400000).toISOString().split('T')[0]
+    const res6M = buildBenchmarkSeries(deduped, [], [], 304, 34.5, '2026-06-22', 784702, range6M, besDeduction)
+    assert(res6M.points.length === 72, `6A returns full 72 daily points without flat lines (got ${res6M.points.length})`)
+    assert(res6M.points[0].rawDate === '2026-06-22', `6A starts on 2026-06-22`)
+    assert(Math.round(res6M.points[0].aktifDeger) === 249345, `Day 0 active value excludes BES (249K, not 750K, got ${res6M.points[0].aktifDeger})`)
+    assert(Math.round(res6M.points[0].qqqmDeger) === 249345, `Day 0 QQQM matches Day 0 active value (got ${res6M.points[0].qqqmDeger})`)
+  }
+}
+
 console.log('\n--- ALL UNIT TESTS PASSED! ---')
