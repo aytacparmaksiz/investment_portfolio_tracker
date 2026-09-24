@@ -237,8 +237,10 @@ const Analytics = () => {
   }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, initialActiveCost, earliestActiveDate, currentActiveCost, range])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
-  const firstVal = chartData[0]?.deger || 0
-  const lastVal = chartData[chartData.length - 1]?.deger || 0
+  const first = chartData[0]?.deger || 0
+  const last = chartData[chartData.length - 1]?.deger || 0
+  const firstVal = first
+  const lastVal = last
   const totalGain = lastVal - firstVal
   const totalGainPct = firstVal > 0 ? (totalGain / firstVal) * 100 : 0
 
