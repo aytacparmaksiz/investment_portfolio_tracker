@@ -109,15 +109,15 @@ export function buildBenchmarkSeries(
   liveUsdRate: number,
   firstTxDate?: string,
   initialCost?: number,
-  rangeFromDate?: string
+  rangeFromDate?: string,
+  besDeduction?: { value: number; cost: number }
 ): { points: BenchmarkChartPoint[]; summary: BenchmarkSummary | null } {
   if (!snapshots || snapshots.length === 0) {
     return { points: [], summary: null };
   }
 
-  // 1. Deduplicate incoming snapshots by snapshot_date (preferring records with valid performance data and latest created_at)
+  // 1. Snapshot kayıtlarını tarihe göre tekilleştir
   const sortedSnaps = deduplicateSnapshots(snapshots);
-
   if (sortedSnaps.length === 0) {
     return { points: [], summary: null };
   }
@@ -127,8 +127,7 @@ export function buildBenchmarkSeries(
     return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })}`;
   };
 
-  // 2. Normalize historical snapshots that lack performance_value
-  // Find first snapshot with a valid performance_value (> 0)
+  // 2. İlk geçerli performans kaydını bul (tarihsel oran tespiti için)
   const firstValid = sortedSnaps.find(
     s => s.performance_value != null && Number(s.performance_value) > 0
   );
@@ -155,60 +154,18 @@ export function buildBenchmarkSeries(
     }
   }
 
-  // If only 1 snapshot and we have an earlier initial date, synthesize a start point
-  let effectiveSnaps: {
-    snapshot_date: string;
-    total_value: number;
-    total_cost: number;
-    performance_value: number;
-    performance_cost: number;
-    isEstimated: boolean;
-    isSynthetic?: boolean;
-  }[] = sortedSnaps.map(s => {
-    const totalV = Number(s.total_value || 0);
-    const totalC = Number(s.total_cost || 0);
-    const hasPerfV = s.performance_value !== null && s.performance_value !== undefined;
-    const hasPerfC = s.performance_cost !== null && s.performance_cost !== undefined;
-
-    let activeV: number;
-    let activeC: number;
-    let isEstimated = false;
-
-    if (hasPerfV) {
-      activeV = Number(s.performance_value);
-      activeC = hasPerfC ? Number(s.performance_cost) : Math.round(totalC * costRatio);
-    } else {
-      if (firstValid && Number(firstValid.performance_value) > 0) {
-        activeV = Math.round(totalV * activeRatio);
-        activeC = Math.round(totalC * costRatio);
-        isEstimated = true;
-      } else {
-        activeV = totalV;
-        activeC = totalC;
-        isEstimated = false;
-      }
-    }
-
-    return {
-      snapshot_date: s.snapshot_date,
-      total_value: totalV,
-      total_cost: totalC,
-      performance_value: activeV,
-      performance_cost: activeC,
-      isEstimated
-    };
-  });
-
-  if (rangeFromDate && effectiveSnaps.length > 1) {
-    const inRange = effectiveSnaps.filter(s => s.snapshot_date >= rangeFromDate);
-    if (inRange.length >= 1) {
-      // If the first in-range snapshot is after rangeFromDate, find the closest preceding snapshot to preserve starting baseline
-      const preceding = effectiveSnaps
+  // 3. Seçilen zaman aralığına göre (7G, 1A, 3A vb.) filtrele
+  let effectiveSnaps = sortedSnaps;
+  if (rangeFromDate && sortedSnaps.length > 1) {
+    const inRange = sortedSnaps.filter(s => s.snapshot_date >= rangeFromDate);
+    if (inRange.length > 0) {
+      // Dönem başlangıcından önceki en yakın snapshot'ı (en fazla 7 gün öncesi) baseline olarak al
+      const preceding = sortedSnaps
         .filter(s => s.snapshot_date < rangeFromDate)
         .sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date))[0];
+
       if (preceding && inRange[0].snapshot_date > rangeFromDate) {
         const daysBeforeRange = (new Date(rangeFromDate).getTime() - new Date(preceding.snapshot_date).getTime()) / 86400000;
-        // Yalnızca aralık başlangıcına yakın (hafta sonu vb. en fazla 7 gün öncesi) önceki kaydı dahil et
         if (daysBeforeRange <= 7) {
           effectiveSnaps = [preceding, ...inRange];
         } else {
@@ -220,198 +177,63 @@ export function buildBenchmarkSeries(
     }
   }
 
+  // 4. Yalnızca tek bir snapshot varsa (örneğin sıfır kilometre yeni kullanıcı)
+  // grafik çizgisinin oluşabilmesi için önceki güne maliyet tabanlı 1 başlangıç noktası ekle
   if (effectiveSnaps.length === 1) {
     const single = effectiveSnaps[0];
-    let baseDate: string;
-    if (rangeFromDate && rangeFromDate < single.snapshot_date) {
-      baseDate = rangeFromDate;
-    } else if (firstTxDate && firstTxDate < single.snapshot_date) {
-      baseDate = firstTxDate;
-    } else {
-      baseDate = new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0];
-    }
+    const baseDate = (rangeFromDate && rangeFromDate < single.snapshot_date)
+      ? rangeFromDate
+      : (firstTxDate && firstTxDate < single.snapshot_date
+          ? firstTxDate
+          : new Date(new Date(single.snapshot_date).getTime() - 86400000).toISOString().split('T')[0]);
 
-    let baseCost = single.total_cost > 0 ? single.total_cost : single.total_value;
-    let perfBaseCost = (single.performance_cost && single.performance_cost > 0) ? single.performance_cost : single.performance_value;
+    const baseCost = single.total_cost > 0 ? single.total_cost : single.total_value;
+    const basePerfCost = (single.performance_cost && single.performance_cost > 0)
+      ? single.performance_cost
+      : (single.performance_value || baseCost);
 
-    if (initialCost && initialCost > 0 && firstTxDate && firstTxDate < single.snapshot_date) {
-      const tFirst = new Date(firstTxDate).getTime();
-      const tSingle = new Date(single.snapshot_date).getTime();
-      const tBase = new Date(baseDate).getTime();
-      if (tSingle > tFirst && tBase >= tFirst) {
-        const factor = (tBase - tFirst) / (tSingle - tFirst);
-        baseCost = Math.round(initialCost + factor * (single.total_cost - initialCost));
-        perfBaseCost = Math.round(initialCost + factor * (single.performance_cost - initialCost));
-      } else {
-        baseCost = initialCost;
-        perfBaseCost = initialCost;
-      }
-    } else if (initialCost && initialCost > 0) {
-      baseCost = initialCost;
-      perfBaseCost = initialCost;
-    }
-
-    const startT = new Date(baseDate).getTime();
-    const endT = new Date(single.snapshot_date).getTime();
-    const totalDays = Math.max(1, Math.round((endT - startT) / 86400000));
-
-    if (rangeFromDate && totalDays > 1) {
-      const synthDays: typeof effectiveSnaps = [];
-      for (let dayIdx = 0; dayIdx < totalDays; dayIdx++) {
-        const dStr = new Date(startT + dayIdx * 86400000).toISOString().split('T')[0];
-        const factor = dayIdx / totalDays;
-        const cost = Math.round(baseCost + factor * (single.total_cost - baseCost));
-        const perfCost = Math.round(perfBaseCost + factor * (single.performance_cost - perfBaseCost));
-
-        const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
-        const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
-        const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
-        const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
-        const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
-
-        const totalVal = Math.round((baseCost + factor * (single.total_value - baseCost)) * (0.95 + 0.05 * marketRatio));
-        const perfVal = Math.round((perfBaseCost + factor * (single.performance_value - perfBaseCost)) * (0.95 + 0.05 * marketRatio));
-
-        synthDays.push({
-          snapshot_date: dStr,
-          total_value: totalVal,
-          total_cost: cost,
-          performance_value: perfVal,
-          performance_cost: perfCost,
-          isEstimated: true,
-          isSynthetic: true
-        });
-      }
-      effectiveSnaps = [...synthDays, single];
-    } else {
-      effectiveSnaps = [
-        {
-          snapshot_date: baseDate,
-          total_value: baseCost,
-          total_cost: baseCost,
-          performance_value: perfBaseCost,
-          performance_cost: perfBaseCost,
-          isEstimated: true,
-          isSynthetic: true
-        },
-        ...effectiveSnaps
-      ];
-    }
+    effectiveSnaps = [
+      {
+        snapshot_date: baseDate,
+        total_value: baseCost,
+        total_cost: baseCost,
+        performance_value: basePerfCost,
+        performance_cost: basePerfCost
+      },
+      single
+    ];
   }
 
-  // 1. If rangeFromDate is specified and the first snapshot starts after rangeFromDate, prepend lead days
-  if (rangeFromDate && effectiveSnaps.length > 0 && effectiveSnaps[0].snapshot_date > rangeFromDate) {
-    const firstSnap = effectiveSnaps[0];
-    const tRange = new Date(rangeFromDate).getTime();
-    const tFirst = new Date(firstSnap.snapshot_date).getTime();
-    const leadDays = Math.round((tFirst - tRange) / 86400000);
-
-    if (leadDays >= 1) {
-      let leadBaseCost = firstSnap.total_cost;
-      let leadPerfCost = firstSnap.performance_cost;
-
-      // Yalnızca leadDays 7 günden uzunsa ve portföy başlangıç tarihi mevcutsa geçmiş başlangıç maliyetinden enterpole et.
-      // Kısa dönemlerde (haftasonu vb. <= 7 gün) ilk snapshot'ın gerçek maliyetini koru (439k -> 1M ani zıplamalarını önler).
-      if (leadDays > 7 && initialCost && initialCost > 0 && firstTxDate && firstTxDate < firstSnap.snapshot_date) {
-        const tTx = new Date(firstTxDate).getTime();
-        if (tFirst > tTx && tRange >= tTx) {
-          const factor = (tRange - tTx) / (tFirst - tTx);
-          leadBaseCost = Math.round(initialCost + factor * (firstSnap.total_cost - initialCost));
-          leadPerfCost = Math.round(initialCost + factor * (firstSnap.performance_cost - initialCost));
-        } else {
-          leadBaseCost = initialCost;
-          leadPerfCost = initialCost;
-        }
-      }
-
-      const leadSnaps: typeof effectiveSnaps = [];
-      for (let d = 0; d < leadDays; d++) {
-        const dStr = new Date(tRange + d * 86400000).toISOString().split('T')[0];
-        const factor = d / leadDays;
-        const cost = (leadDays <= 7) ? firstSnap.total_cost : Math.round(leadBaseCost + factor * (firstSnap.total_cost - leadBaseCost));
-        const perfCost = (leadDays <= 7) ? firstSnap.performance_cost : Math.round(leadPerfCost + factor * (firstSnap.performance_cost - leadPerfCost));
-
-        const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
-        const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
-        const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
-        const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
-        const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
-
-        const totalVal = (leadDays <= 7)
-          ? firstSnap.total_value
-          : Math.round((leadBaseCost + factor * (firstSnap.total_value - leadBaseCost)) * (0.95 + 0.05 * marketRatio));
-        const perfVal = (leadDays <= 7)
-          ? firstSnap.performance_value
-          : Math.round((leadPerfCost + factor * (firstSnap.performance_value - leadPerfCost)) * (0.95 + 0.05 * marketRatio));
-
-        leadSnaps.push({
-          snapshot_date: dStr,
-          total_value: totalVal,
-          total_cost: cost,
-          performance_value: perfVal,
-          performance_cost: perfCost,
-          isEstimated: true,
-          isSynthetic: true
-        });
-      }
-      effectiveSnaps = [...leadSnaps, ...effectiveSnaps];
-    }
-  }
-
-  // 2. Fill any gaps > 1 day between consecutive snapshots with daily market-simulated points
-  if (effectiveSnaps.length > 1) {
-    const filledSnaps: typeof effectiveSnaps = [];
-    for (let i = 0; i < effectiveSnaps.length; i++) {
-      filledSnaps.push(effectiveSnaps[i]);
-      if (i < effectiveSnaps.length - 1) {
-        const curr = effectiveSnaps[i];
-        const next = effectiveSnaps[i + 1];
-        const tCurr = new Date(curr.snapshot_date).getTime();
-        const tNext = new Date(next.snapshot_date).getTime();
-        const gapDays = Math.round((tNext - tCurr) / 86400000);
-
-        if (gapDays > 1) {
-          for (let d = 1; d < gapDays; d++) {
-            const dStr = new Date(tCurr + d * 86400000).toISOString().split('T')[0];
-            const factor = d / gapDays;
-            // Ara günlerde maliyet adım olarak son bilinen maliyette kalır (yatırım yapılmadıkça kademeli artmaz)
-            const cost = curr.total_cost;
-            const perfCost = curr.performance_cost;
-
-            const qqqmDayUsd = findClosestPrice(qqqmHistory, dStr, liveQqqmUSD);
-            const usdDayRate = findClosestPrice(usdHistory, dStr, liveUsdRate);
-            const qqqmLiveTRY = liveQqqmUSD * liveUsdRate;
-            const qqqmDayTRY = (qqqmDayUsd > 0 && usdDayRate > 0) ? qqqmDayUsd * usdDayRate : qqqmLiveTRY;
-            const marketRatio = qqqmLiveTRY > 0 ? qqqmDayTRY / qqqmLiveTRY : 1;
-
-            const totalVal = Math.round((curr.total_value + factor * (next.total_value - curr.total_value)) * (0.95 + 0.05 * marketRatio));
-            const perfVal = Math.round((curr.performance_value + factor * (next.performance_value - curr.performance_value)) * (0.95 + 0.05 * marketRatio));
-
-            filledSnaps.push({
-              snapshot_date: dStr,
-              total_value: totalVal,
-              total_cost: cost,
-              performance_value: perfVal,
-              performance_cost: perfCost,
-              isEstimated: true,
-              isSynthetic: true
-            });
-          }
-        }
-      }
-    }
-    effectiveSnaps = filledSnaps;
-  }
-
-  // Calculate QQQM shadow investment tracking active portfolio capital
+  // 5. Ham snapshot verilerini doğrudan grafik noktalarına dönüştür & QQQM Benchmark hesapla
+  // (KESİNLİKLE sentetik ara günler, leadDays veya yapay interpolasyon eklenmez!)
   let runningShares = 0;
   let runningInvested = 0;
   let previousActiveCost = 0;
   let lastKnownQqqmPriceTRY = 0;
 
   const points: BenchmarkChartPoint[] = effectiveSnaps.map((s, idx) => {
-    const activeV = s.performance_value;
-    const activeC = s.performance_cost;
+    const totalV = Number(s.total_value || 0);
+    const totalC = Number(s.total_cost || 0);
+
+    // Aktif Portföy: BES tutarı Day 0'dan itibaren tamamen çıkarılmış saf yatırım portföyü
+    let activeV: number;
+    let activeC: number;
+
+    if (s.performance_value != null && Number(s.performance_value) > 0) {
+      activeV = Number(s.performance_value);
+      activeC = (s.performance_cost != null && Number(s.performance_cost) > 0)
+        ? Number(s.performance_cost)
+        : (totalC > 0 && firstValid ? Math.round(totalC * costRatio) : totalC);
+    } else if (besDeduction && (besDeduction.value > 0 || besDeduction.cost > 0)) {
+      activeV = Math.max(0, totalV - (besDeduction.value || 0));
+      activeC = Math.max(0, totalC - (besDeduction.cost || 0));
+    } else if (firstValid && Number(firstValid.performance_value) > 0) {
+      activeV = Math.round(totalV * activeRatio);
+      activeC = Math.round(totalC * costRatio);
+    } else {
+      activeV = totalV;
+      activeC = totalC;
+    }
 
     // Determine QQQM price in TRY for this date
     const qqqmUsd = findClosestPrice(qqqmHistory, s.snapshot_date, liveQqqmUSD);
@@ -427,7 +249,7 @@ export function buildBenchmarkSeries(
     let qqqmVal = 0;
 
     if (idx === 0) {
-      // Day 0: Benchmark matches initial active portfolio capital
+      // Day 0: Benchmark doğrudan BES'siz aktif portföy değeriyle başlar
       runningInvested = activeC;
       previousActiveCost = activeC;
       if (qqqmPriceTRY > 0 && activeV > 0) {
@@ -435,7 +257,7 @@ export function buildBenchmarkSeries(
       }
       qqqmVal = activeV;
     } else {
-      // Recover runningShares if day 0 had no valid price or 0 capital
+      // Recover runningShares if day 0 had no valid price
       if (runningShares === 0 && qqqmPriceTRY > 0) {
         const baseForShares = activeV > 0 ? activeV : (activeC > 0 ? activeC : 0);
         if (baseForShares > 0) {
@@ -444,39 +266,31 @@ export function buildBenchmarkSeries(
         }
       } else {
         const costDelta = activeC - previousActiveCost;
-        const prevSnap = effectiveSnaps[idx - 1];
-        const isTransitionFromEstimated =
-          (prevSnap && prevSnap.isEstimated && !s.isEstimated) || Boolean(prevSnap?.isSynthetic);
 
         if (costDelta > 0 && qqqmPriceTRY > 0) {
-          // Additional capital added -> buy more QQQM shares
+          // Aktif portföye yeni nakit/maliyet eklendiğinde QQQM payı al
           const newShares = costDelta / qqqmPriceTRY;
           runningShares += newShares;
           runningInvested += costDelta;
         } else if (costDelta < 0 && previousActiveCost > 0) {
-          if (!isTransitionFromEstimated) {
-            // Capital withdrawn -> proportional share redemption
-            const withdrawRatio = Math.min(1, Math.abs(costDelta) / previousActiveCost);
-            runningShares = Math.max(0, runningShares * (1 - withdrawRatio));
-            runningInvested += costDelta;
-          } else {
-            // Transition from estimated to first real snapshot or from synthetic point:
-            // Do not trigger cash withdrawal / share redemption on negative costDelta
-            runningInvested = activeC;
-          }
+          // Sermaye çıkışı yapıldığında oransal pay itfası
+          const withdrawRatio = Math.min(1, Math.abs(costDelta) / previousActiveCost);
+          runningShares = Math.max(0, runningShares * (1 - withdrawRatio));
+          runningInvested += costDelta;
         }
       }
       previousActiveCost = activeC;
       qqqmVal = runningShares * qqqmPriceTRY;
     }
 
-    const totalKar = s.total_cost > 0 ? s.total_value - s.total_cost : 0;
+    // Doğal kâr/zarar: total_value - total_cost
+    const totalKar = totalC > 0 ? totalV - totalC : (totalV > 0 ? totalV : 0);
 
     return {
       date: formatDate(s.snapshot_date),
       rawDate: s.snapshot_date,
-      deger: s.total_value,
-      maliyet: s.total_cost,
+      deger: totalV,
+      maliyet: totalC,
       kar: totalKar,
       aktifDeger: activeV,
       aktifMaliyet: activeC,

@@ -161,11 +161,10 @@ const Analytics = () => {
       let effectiveData = data
 
       // KULLANICI TALEBİ / GERÇEK VERİ KORUMA:
-      // Supabase'de portföyün toplam değeri ve maliyeti için kayıtlı günlük snapshot'lar varsa (data.length > 1),
+      // Supabase'de portföyün toplam değeri ve maliyeti için kayıtlı günlük snapshot'lar varsa (data.length > 0),
       // bu verileri doğrudan kullan ve KESİNLİKLE sentetik normalizasyon ile EZME!
-      // Yalnızca ve yalnızca veritabanında hiç snapshot yoksa veya sadece 1 snapshot varsa
-      // yeni kullanıcının ekranının boş kalmaması için geçmişi simüle et.
-      if (data.length <= 1 && activeAssets.length > 0) {
+      // Yalnızca ve yalnızca veritabanında hiç snapshot yoksa (sıfır kullanıcı) geçmişi simüle et.
+      if (data.length === 0 && activeAssets.length > 0) {
         const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const localCurrentTotalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
 
@@ -242,23 +241,31 @@ const Analytics = () => {
     const effectiveFirstDate = firstTxDate || earliestActiveDate
     const effectiveCost = initialActiveCost > 0 ? initialActiveCost : currentActiveCost
 
-    // GÜVENLİK AĞI: Veritabanında snapshot henüz oluşmamış olsa dahi aktif varlıklar varsa anlık veriden başlat
+    // BES tutarlarını hesapla (benchmark'tan Day 0'dan itibaren arındırmak için)
+    const besAssets = assets.filter(a => a.type === 'bes')
+    const besVal = besAssets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
+    const besCst = besAssets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
+    const besDeduction = { value: Math.round(besVal), cost: Math.round(besCst) }
+
+    // GÜVENLİK AĞI & ANLIK GÜNCEL VERİ ENTEGRASYONU:
     let effectiveSnaps = [...snapshots]
-    if (effectiveSnaps.length === 0 && assets.length > 0) {
-      const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = new Date().toISOString().split('T')[0]
+
+    // Eğer bugünün tarihi snapshot'larda yoksa, anlık varlık değerlerini son nokta olarak ekle
+    if (assets.length > 0 && !effectiveSnaps.some(s => s.snapshot_date === todayStr)) {
       const totalV = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRateLocal), 0)
       const totalC = assets.reduce((sum, a) => sum + getCostValue(a, usdRateLocal), 0)
       const perfV = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCurrentValue(a, prices, usdRateLocal) : sum, 0)
       const pc = assets.reduce((sum, a) => isPerformanceAsset(a) ? sum + getCostValue(a, usdRateLocal) : sum, 0)
 
       if (totalV > 0 || totalC > 0) {
-        effectiveSnaps = [{
+        effectiveSnaps.push({
           snapshot_date: todayStr,
           total_value: Math.round(totalV),
           total_cost: Math.round(totalC),
           performance_value: Math.round(perfV),
           performance_cost: Math.round(pc)
-        }]
+        })
       }
     }
 
@@ -270,7 +277,8 @@ const Analytics = () => {
       usdRateLocal,
       effectiveFirstDate,
       effectiveCost,
-      rangeFromDate
+      rangeFromDate,
+      besDeduction
     )
     return { chartData: points, benchmarkSummary: summary }
   }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, initialActiveCost, earliestActiveDate, currentActiveCost, range])
