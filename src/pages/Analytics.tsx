@@ -237,13 +237,19 @@ const Analytics = () => {
   }, [snapshots, assets, benchmarkPrices, prices, firstTxDate, initialActiveCost, earliestActiveDate, currentActiveCost, range])
 
   // Genel Özet Kartları İçin Hesaplamalar (Tüm Servet)
-  const first = chartData[0]?.deger || 0
-  const last = chartData[chartData.length - 1]?.deger || 0
-  const totalGain = last - first
-  const totalGainPct = first > 0 ? (totalGain / first) * 100 : 0
-  const latestProfit = Number(chartData[chartData.length - 1]?.kar || 0)
-  const latestCost = Number(chartData[chartData.length - 1]?.maliyet || 0)
-  const currentRoiPct = latestCost > 0 ? (latestProfit / latestCost) * 100 : 0
+  const firstVal = chartData[0]?.deger || 0
+  const lastVal = chartData[chartData.length - 1]?.deger || 0
+  const totalGain = lastVal - firstVal
+  const totalGainPct = firstVal > 0 ? (totalGain / firstVal) * 100 : 0
+
+  const firstProfit = Number(chartData[0]?.kar || 0)
+  const lastProfit = Number(chartData[chartData.length - 1]?.kar || 0)
+  const profitDiff = lastProfit - firstProfit
+  const firstCost = Number(chartData[0]?.maliyet || 0)
+  const lastCost = Number(chartData[chartData.length - 1]?.maliyet || 0)
+  const baseCost = firstCost > 0 ? firstCost : lastCost
+  const periodProfitPct = baseCost > 0 ? (profitDiff / baseCost) * 100 : 0
+  const latestProfit = lastProfit
 
   // Benchmark Grafiği verisi (tüm geçerli noktalar)
   const benchmarkData = chartData.filter(d => d.qqqmDeger > 0)
@@ -599,7 +605,10 @@ const Analytics = () => {
                   <div>
                     <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
                     <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      {ranges.find(r => r.value === range)?.label || ''} dönem değişimi
+                      {ranges.find(r => r.value === range)?.label || ''} dönem değişimi:{' '}
+                      <strong style={{ color: totalGain >= 0 ? '#10b981' : '#ef4444' }}>
+                        {isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`}
+                      </strong>
                     </p>
                   </div>
                   <div style={{
@@ -644,23 +653,26 @@ const Analytics = () => {
                       <span title="Bu grafiğe BES performansı dahildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
                     </div>
                     <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      Net getiri oranı
+                      {ranges.find(r => r.value === range)?.label || ''} net kâr değişimi:{' '}
+                      <strong style={{ color: profitDiff >= 0 ? '#10b981' : '#ef4444' }}>
+                        {isHidden ? '••••••' : `${profitDiff >= 0 ? '+' : ''}${fc(profitDiff)}`}
+                      </strong>
                     </p>
                   </div>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
-                    background: currentRoiPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                    border: `1px solid ${currentRoiPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                    color: currentRoiPct >= 0 ? '#10b981' : '#ef4444',
+                    background: periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    border: `1px solid ${periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                    color: periodProfitPct >= 0 ? '#10b981' : '#ef4444',
                     padding: '4px 10px',
                     borderRadius: '20px',
                     fontSize: '12px',
                     fontWeight: '700'
                   }}>
-                    <span>{currentRoiPct >= 0 ? '▲' : '▼'}</span>
-                    <span>{currentRoiPct >= 0 ? '+' : ''}{currentRoiPct.toFixed(2)}%</span>
+                    <span>{periodProfitPct >= 0 ? '▲' : '▼'}</span>
+                    <span>{periodProfitPct >= 0 ? '+' : ''}{periodProfitPct.toFixed(2)}%</span>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={200}>
