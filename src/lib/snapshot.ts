@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { deduplicateSnapshots } from './benchmark'
 
 export async function saveSnapshot(
   portfolioId: string,
@@ -124,4 +125,4 @@ export async function fetchSnapshots(
   return []
 }
 
-export { deduplicateSnapshots } from './benchmark'
+export { deduplicateSnapshots }
