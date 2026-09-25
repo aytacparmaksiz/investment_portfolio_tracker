@@ -476,7 +476,7 @@ const Analytics = () => {
                                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                                     <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
                                     <div>
-                                      <p style={{ fontWeight: '700', fontSize: '14px', color: '#1e1b4b' }}>{asset.name}</p>
+                                      <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
                                       <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>
                                         {asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet{asset.type === 'usd_hisse' && asset.strategy ? (
                                           <> · <span style={{ color: 'var(--accent)' }}>{asset.strategy}</span></>
@@ -543,7 +543,7 @@ const Analytics = () => {
                           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                             <div style={{ width: '3px', height: '32px', borderRadius: '2px', background: TYPE_COLORS[type] || '#6b7280', flexShrink: 0, marginTop: '2px' }} />
                             <div>
-                              <p style={{ fontWeight: '700', fontSize: '14px', color: '#1e1b4b' }}>{asset.name}</p>
+                              <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{asset.name}</p>
                               <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '1px' }}>{asset.symbol} · {isHidden ? '••••••' : asset.quantity} adet</p>
                             </div>
                           </div>

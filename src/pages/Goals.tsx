@@ -596,7 +596,7 @@ const Goals = () => {
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>$1M Hedef İlerlemesi (Net Varlık)</p>
-              <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</p>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--green)' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</p>
             </div>
 
             <div style={{ position: 'relative', height: '24px', background: 'var(--bg-elevated)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -881,7 +881,7 @@ const Goals = () => {
 
                 <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', marginBottom: '14px', border: '1px solid var(--border)' }}>
                   <button onClick={() => setSavingType('giris')}
-                    style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'giris' ? '#10b981' : 'none', color: savingType === 'giris' ? 'white' : 'var(--text-secondary)' }}>
+                    style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'giris' ? 'var(--green)' : 'none', color: savingType === 'giris' ? 'white' : 'var(--text-secondary)' }}>
                     ↑ Giriş
                   </button>
                   <button onClick={() => setSavingType('cekim')}
@@ -976,7 +976,7 @@ const Goals = () => {
                       </div>
                       <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                         <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Ortalama Oran</p>
-                        <p style={{ fontSize: '15px', fontWeight: '800', color: '#10b981' }}>%{isHidden ? '••' : ytdAvgRate.toFixed(1)}</p>
+                        <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--green)' }}>%{isHidden ? '••' : ytdAvgRate.toFixed(1)}</p>
                         <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>gelire oranla</p>
                       </div>
                     </div>
@@ -999,7 +999,7 @@ const Goals = () => {
                               <p style={{ fontWeight: '700', marginBottom: '6px', color: 'var(--text-primary)' }}>{data.month}</p>
                               <p style={{ color: '#80cbd0' }}>Gelir: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.gelir)}</strong></p>
                               <p style={{ color: '#264653' }}>Tasarruf: <strong style={{ color: 'var(--text-primary)' }}>{fc(data.tasarruf)}</strong></p>
-                              <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-light)', color: '#10b981', fontWeight: '700' }}>
+                              <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-light)', color: 'var(--green)', fontWeight: '700' }}>
                                 Tasarruf Oranı: %{isHidden ? '••' : data.oran.toFixed(1)}
                               </div>
                             </div>
