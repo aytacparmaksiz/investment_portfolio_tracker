@@ -612,7 +612,7 @@ const Analytics = () => {
                 Grafik oluşması için portföy snapshot verisi kaydedilmesi gerekiyor.
               </p>
               <button
-                onClick={async () => {
+                onClick={async () = role="button" tabIndex={0} aria-label="buton"> {
                   setSnapshotsLoading(true)
                   try {
                     await refresh(true)
@@ -678,7 +678,7 @@ const Analytics = () => {
 
               <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
                 {ranges.map(r => (
-                  <button key={r.value} onClick={() => setRange(r.value)}
+                  <button key={r.value} onClick={() = role="button" tabIndex={0} aria-label="buton"> setRange(r.value)}
                     style={{ flex: 1, padding: '8px 0', borderRadius: '10px', fontSize: '12px', fontWeight: '700',
                       background: range === r.value ? 'var(--accent)' : 'var(--bg-card)',
                       border: `1px solid ${range === r.value ? 'var(--accent)' : 'var(--border)'}`,
@@ -868,15 +868,15 @@ const Analytics = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Başlangıç Tarihi</label>
-                        <input type="date" value={compDate !== null ? compDate : (firstTxDate || earliestActiveDate || "2025-01-01")} onChange={e => setCompDate(e.target.value)}
+                        <input type="date" value={compDate !== null ? compDate : (firstTxDate || earliestActiveDate || "2025-01-01")} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setCompDate(e.target.value)}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" inputMode="decimal" step="any" value={compCost !== null ? compCost : Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()}
+                        <input type="number" inputMode="decimal" step="any" value={compCost !== null ? compCost : Math.round(initialActiveCost  tabIndex={0} aria-label="Giriş alanı"> 0 ? initialActiveCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
-                      <button onClick={async () => {
+                      <button onClick={async () = role="button" tabIndex={0} aria-label="buton"> {
                         const fromDate = (compDate !== null ? compDate : (firstTxDate || earliestActiveDate || '2025-01-01')) || '2025-01-01'
                         const cost = Number(compCost !== null ? compCost : (initialActiveCost > 0 ? initialActiveCost : currentActiveCost)) || (initialActiveCost > 0 ? initialActiveCost : currentActiveCost)
                         setCompLoading(true)
@@ -948,7 +948,7 @@ const Analytics = () => {
                           <p style={{ fontSize: '28px' }}>💼</p>
                         </div>
 
-                        <button onClick={() => setComparison(null)}
+                        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setComparison(null)}
                           style={{ padding: '8px', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
                           Yeniden Hesapla
                         </button>

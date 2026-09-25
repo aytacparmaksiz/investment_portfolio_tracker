@@ -705,17 +705,17 @@ const Assets = () => {
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>Varlığı Düzenle</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{editAsset.name}</p>
               </div>
-              <button onClick={() => setEditAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setEditAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
 
             <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>Varlık Adı</label>
-              <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={inputStyle} />
+              <input value={editForm.name} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setEditForm({ ...editForm, name: e.target.value })} style={inputStyle} />
             </div>
 
             <div style={{ marginBottom: '12px', position: 'relative' }}>
               <label style={labelStyle}>Sembol</label>
-              <input value={editForm.symbol} onChange={e => handleEditSymbolSearch(e.target.value)} style={inputStyle} />
+              <input value={editForm.symbol} onChange={e = tabIndex={0} aria-label="Giriş alanı"> handleEditSymbolSearch(e.target.value)} style={inputStyle} />
               {editSearching && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>Aranıyor...</p>}
               {editSearchResults.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
@@ -738,8 +738,8 @@ const Assets = () => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={editForm.quantity} onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} style={inputStyle} /></div>
-              <div><label style={labelStyle}>Ortalama Maliyet {isUSD(editAsset.type) ? '($)' : '(₺)'}</label><input type="number" inputMode="decimal" step="any" value={editForm.avg_cost} onChange={e => setEditForm({ ...editForm, avg_cost: e.target.value })} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={editForm.quantity} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setEditForm({ ...editForm, quantity: e.target.value })} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Ortalama Maliyet {isUSD(editAsset.type) ? '($)' : '(₺)'}</label><input type="number" inputMode="decimal" step="any" value={editForm.avg_cost} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setEditForm({ ...editForm, avg_cost: e.target.value })} style={inputStyle} /></div>
             </div>
 
             {editAsset.type === 'usd_hisse' && (
@@ -766,7 +766,7 @@ const Assets = () => {
 
             {editError && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{editError}</div>}
             
-            <button onClick={handleEditSave} disabled={editSaving} style={{ width: '100%', padding: '14px', background: '#3b82f6', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: editSaving ? 0.7 : 1 }}>
+            <button onClick={handleEditSave} disabled={editSaving} style={{ width: '100%', padding: '14px', background: '#3b82f6', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: editSaving ? 0.7 : 1 }} role="button" tabIndex={0} aria-label="buton">
               {editSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
             </button>
           </div>
@@ -779,31 +779,31 @@ const Assets = () => {
           <div className="modal-content" ref={txModalRef}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{txAsset.name}</h3>
-              <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
               Mevcut: <strong>{isHidden ? '••••••' : `${txAsset.quantity} adet`}</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
             </p>
             <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '3px', marginBottom: '20px', border: '1px solid var(--border)' }}>
-              <button onClick={() => setTxType('buy')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', background: txType === 'buy' ? 'var(--green)' : 'none', color: txType === 'buy' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>↑ Alım</button>
-              <button onClick={() => setTxType('sell')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', background: txType === 'sell' ? 'var(--red)' : 'none', color: txType === 'sell' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>↓ Satım</button>
+              <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setTxType('buy')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', background: txType === 'buy' ? 'var(--green)' : 'none', color: txType === 'buy' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>↑ Alım</button>
+              <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setTxType('sell')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', background: txType === 'sell' ? 'var(--red)' : 'none', color: txType === 'sell' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>↓ Satım</button>
             </div>
             {isUSD(txAsset.type) ? (
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Adet</label>
-                    <input type="number" inputMode="decimal" step="any" value={txForm.quantity} onChange={e => setTxForm({ ...txForm, quantity: e.target.value })} placeholder="100" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={txForm.quantity} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, quantity: e.target.value })} placeholder="100" style={inputStyle} />
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>Birim Fiyat ($)</label>
-                    <input type="number" inputMode="decimal" step="any" value={txForm.price} onChange={e => setTxForm({ ...txForm, price: e.target.value })} placeholder="örn. 242" style={{ ...inputStyle, border: '1px solid var(--accent)' }} />
+                    <input type="number" inputMode="decimal" step="any" value={txForm.price} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, price: e.target.value })} placeholder="örn. 242" style={{ ...inputStyle, border: '1px solid var(--accent)' }} />
                   </div>
                 </div>
                 {txRateNotFound && (
                   <div style={{ marginBottom: '10px' }}>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--accent)' }}>O Tarihteki USD/TRY Kuru (manuel)</label>
-                    <input type="number" inputMode="decimal" step="any" value={txForm.manualRate} onChange={e => setTxForm({ ...txForm, manualRate: e.target.value })} placeholder="örn. 44.20" style={{ ...inputStyle, border: '1px solid var(--accent)' }} />
+                    <input type="number" inputMode="decimal" step="any" value={txForm.manualRate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, manualRate: e.target.value })} placeholder="örn. 44.20" style={{ ...inputStyle, border: '1px solid var(--accent)' }} />
                   </div>
                 )}
               </div>
@@ -811,11 +811,11 @@ const Assets = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Adet</label>
-                  <input type="number" inputMode="decimal" step="any" value={txForm.quantity} onChange={e => setTxForm({ ...txForm, quantity: e.target.value })} placeholder="100" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={txForm.quantity} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, quantity: e.target.value })} placeholder="100" style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>Birim Fiyat (₺)</label>
-                  <input type="number" inputMode="decimal" step="any" value={txForm.price} onChange={e => setTxForm({ ...txForm, price: e.target.value })} placeholder="250" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={txForm.price} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, price: e.target.value })} placeholder="250" style={inputStyle} />
                 </div>
               </div>
             )}
@@ -837,7 +837,7 @@ const Assets = () => {
                     <button
                       key={chip.val}
                       type="button"
-                      onClick={() => handleQuickSell(chip.val)}
+                      onClick={() = role="button" tabIndex={0} aria-label="buton"> handleQuickSell(chip.val)}
                       style={{
                         padding: '6px 4px',
                         background: 'var(--bg-elevated)',
@@ -859,11 +859,11 @@ const Assets = () => {
             )}
             <div style={{ marginBottom: '10px' }}>
               <label style={labelStyle}>Tarih</label>
-              <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} style={inputStyle} />
+              <input type="date" value={txForm.date} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, date: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={labelStyle}>Not (opsiyonel)</label>
-              <input type="text" value={txForm.note} onChange={e => setTxForm({ ...txForm, note: e.target.value })} placeholder="Örn: Uzun vadeli alım" style={inputStyle} />
+              <input type="text" value={txForm.note} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTxForm({ ...txForm, note: e.target.value })} placeholder="Örn: Uzun vadeli alım" style={inputStyle} />
             </div>
             {txType === 'buy' && (
               <div style={{
@@ -882,7 +882,7 @@ const Assets = () => {
                     type="checkbox"
                     id="deductCashBuy"
                     checked={deductCashOnBuy}
-                    onChange={e => setDeductCashOnBuy(e.target.checked)}
+                    onChange={e = tabIndex={0} aria-label="Giriş alanı"> setDeductCashOnBuy(e.target.checked)}
                     style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                   />
                   <label htmlFor="deductCashBuy" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
@@ -911,7 +911,7 @@ const Assets = () => {
                   type="checkbox"
                   id="creditCash"
                   checked={creditCashOnSell}
-                  onChange={e => setCreditCashOnSell(e.target.checked)}
+                  onChange={e = tabIndex={0} aria-label="Giriş alanı"> setCreditCashOnSell(e.target.checked)}
                   style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                 />
                 <label htmlFor="creditCash" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
@@ -925,7 +925,7 @@ const Assets = () => {
               </div>
             )}
             <button onClick={handleTxSave} disabled={txSaving}
-              style={{ width: '100%', padding: '14px', background: txType === 'buy' ? 'var(--green)' : 'var(--red)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: txSaving ? 0.7 : 1, marginBottom: '20px' }}>
+              style={{ width: '100%', padding: '14px', background: txType === 'buy' ? 'var(--green)' : 'var(--red)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: txSaving ? 0.7 : 1, marginBottom: '20px' }} role="button" tabIndex={0} aria-label="buton">
               {txSaving ? 'Kaydediliyor...' : txType === 'buy' ? '↑ Alımı Kaydet' : '↓ Satımı Kaydet'}
             </button>
             {txHistory.length > 0 && (
@@ -947,7 +947,7 @@ const Assets = () => {
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
                       </div>
-                      <button onClick={() => handleDeleteTx(tx.id)} disabled={txSaving} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }} title="İşlemi Sil">✕</button>
+                      <button onClick={() = role="button" tabIndex={0} aria-label="buton"> handleDeleteTx(tx.id)} disabled={txSaving} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }} title="İşlemi Sil">✕</button>
                     </div>
                   </div>
                 ))}
@@ -966,17 +966,17 @@ const Assets = () => {
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{manualAsset.name}</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Manuel değer güncelle</p>
               </div>
-              <button onClick={() => setManualAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setManualAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
             </div>
             {manualAsset.type === 'bes' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <label style={labelStyle}>Yatırılan Tutar</label>
-                  <input type="number" inputMode="decimal" step="any" value={manualForm.principal} onChange={e => setManualForm({ ...manualForm, principal: e.target.value })} placeholder="150000" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={manualForm.principal} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, principal: e.target.value })} placeholder="150000" style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Güncel Değer</label>
-                  <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="350000" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, value: e.target.value })} placeholder="350000" style={inputStyle} />
                 </div>
               </div>
             )}
@@ -984,40 +984,40 @@ const Assets = () => {
               <>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={labelStyle}>Anapara</label>
-                  <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="100000" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, value: e.target.value })} placeholder="100000" style={inputStyle} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <label style={labelStyle}>Yıllık Faiz (%)</label>
-                    <input type="number" inputMode="decimal" step="any" value={manualForm.interest_rate} onChange={e => setManualForm({ ...manualForm, interest_rate: e.target.value })} placeholder="40" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={manualForm.interest_rate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, interest_rate: e.target.value })} placeholder="40" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Vade (Gün)</label>
-                    <input type="number" inputMode="numeric" step="1" value={manualForm.maturity_days} onChange={e => setManualForm({ ...manualForm, maturity_days: e.target.value })} placeholder="30" style={inputStyle} />
+                    <input type="number" inputMode="numeric" step="1" value={manualForm.maturity_days} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, maturity_days: e.target.value })} placeholder="30" style={inputStyle} />
                   </div>
                 </div>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={labelStyle}>Başlangıç Tarihi</label>
-                  <input type="date" value={manualForm.start_date} onChange={e => setManualForm({ ...manualForm, start_date: e.target.value })} style={inputStyle} />
+                  <input type="date" value={manualForm.start_date} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, start_date: e.target.value })} style={inputStyle} />
                 </div>
               </>
             )}
             {manualAsset.type === 'nakit' && (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>TRY Nakit Tutarı (₺)</label>
-                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="50000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, value: e.target.value })} placeholder="50000" style={inputStyle} />
               </div>
             )}
             {manualAsset.type === 'usd_nakit' && (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>USD Nakit Tutarı ($)</label>
-                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             )}
             {manualAsset.type === 'eur_nakit' && (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
-                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             )}
             {manualError && (
@@ -1025,7 +1025,7 @@ const Assets = () => {
                 {manualError}
               </div>
             )}
-            <button onClick={handleManualUpdate} disabled={manualSaving} style={{ width: '100%', padding: '14px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: manualSaving ? 0.7 : 1 }}>
+            <button onClick={handleManualUpdate} disabled={manualSaving} style={{ width: '100%', padding: '14px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: manualSaving ? 0.7 : 1 }} role="button" tabIndex={0} aria-label="buton">
               {manualSaving ? 'Güncelleniyor...' : 'Güncelle'}
             </button>
           </div>
@@ -1038,7 +1038,7 @@ const Assets = () => {
           <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Varlık & İşlem Yönetimi</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Yeni varlık ekle, alım-satım yap ve portföyünü yönet</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowForm(!showForm)}
           style={{ padding: '10px 18px', background: showForm ? 'var(--bg-card)' : 'var(--accent)', border: `1px solid ${showForm ? 'var(--border)' : 'var(--accent)'}`, borderRadius: '12px', color: showForm ? 'var(--text-secondary)' : 'white', fontWeight: '700', fontSize: '14px', boxShadow: showForm ? 'var(--shadow)' : '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'nowrap' }}>
           {showForm ? 'İptal' : '+ Yeni Varlık'}
         </button>
@@ -1057,7 +1057,7 @@ const Assets = () => {
             <label style={labelStyle}>Varlık Türü</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {ASSET_TYPES.map(t => (
-                <button key={t.value} onClick={() => setForm({
+                <button key={t.value} onClick={() = role="button" tabIndex={0} aria-label="buton"> setForm({
                   ...form,
                   type: t.value,
                   name: (!form.name || form.name === 'Nakit (TL)' || form.name === 'USD Nakit' || form.name === 'EUR Nakit')
@@ -1075,12 +1075,12 @@ const Assets = () => {
           </div>
           <div style={{ marginBottom: '12px' }}>
             <label style={labelStyle}>Varlık Adı</label>
-            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="örn. Türk Hava Yolları" style={inputStyle} />
+            <input value={form.name} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, name: e.target.value })} placeholder="örn. Türk Hava Yolları" style={inputStyle} />
           </div>
           {selectedType?.hasSymbol && (
             <div style={{ marginBottom: '12px', position: 'relative' }}>
               <label style={labelStyle}>Sembol</label>
-              <input value={form.symbol} onChange={e => handleSymbolSearch(e.target.value)} placeholder={selectedType.symbolPlaceholder} style={inputStyle} />
+              <input value={form.symbol} onChange={e = tabIndex={0} aria-label="Giriş alanı"> handleSymbolSearch(e.target.value)} placeholder={selectedType.symbolPlaceholder} style={inputStyle} />
               {searching && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>Aranıyor...</p>}
               {searchResults.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
@@ -1101,31 +1101,31 @@ const Assets = () => {
           <div>
             {form.type === 'bes' ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div><label style={labelStyle}>Yatırılan Tutar (₺)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="150000" style={inputStyle} /></div>
-                <div><label style={labelStyle}>Güncel Değer (₺)</label><input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="350000" style={inputStyle} /></div>
+                <div><label style={labelStyle}>Yatırılan Tutar (₺)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, avg_cost: e.target.value })} placeholder="150000" style={inputStyle} /></div>
+                <div><label style={labelStyle}>Güncel Değer (₺)</label><input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, manual_value: e.target.value })} placeholder="350000" style={inputStyle} /></div>
               </div>
             ) : form.type === 'usd_nakit' ? (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>USD Nakit Tutarı ($)</label>
-                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             ) : form.type === 'eur_nakit' ? (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
-                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             ) : isVadeli ? (
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div><label style={labelStyle}>Yıllık Faiz (%)</label><input type="number" inputMode="decimal" step="any" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Vade (Gün)</label><input type="number" inputMode="numeric" step="1" value={form.maturity_days} onChange={e => setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Yıllık Faiz (%)</label><input type="number" inputMode="decimal" step="any" value={form.interest_rate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Vade (Gün)</label><input type="number" inputMode="numeric" step="1" value={form.maturity_days} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} /></div>
                 </div>
-                <div style={{ marginBottom: '12px' }}><label style={labelStyle}>Başlangıç Tarihi</label><input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} style={inputStyle} /></div>
+                <div style={{ marginBottom: '12px' }}><label style={labelStyle}>Başlangıç Tarihi</label><input type="date" value={form.start_date} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, start_date: e.target.value })} style={inputStyle} /></div>
               </div>
             ) : (
               <div style={{ marginBottom: '12px' }}>
                 <label style={labelStyle}>Anapara (₺)</label>
-                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
+                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
               </div>
             )}
             </div>
@@ -1153,12 +1153,12 @@ const Assets = () => {
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Birim Fiyat ($)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="240" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={form.quantity} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Birim Fiyat ($)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, avg_cost: e.target.value })} placeholder="240" style={inputStyle} /></div>
                 </div>
-                <div style={{ marginBottom: '12px' }}><label style={labelStyle}>İşlem Tarihi</label><input type="date" value={form.txDate} onChange={e => setForm({ ...form, txDate: e.target.value })} style={inputStyle} /></div>
+                <div style={{ marginBottom: '12px' }}><label style={labelStyle}>İşlem Tarihi</label><input type="date" value={form.txDate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, txDate: e.target.value })} style={inputStyle} /></div>
                 {rateNotFound && (
-                  <div style={{ marginBottom: '12px' }}><label style={{ ...labelStyle, color: 'var(--accent)' }}>O Tarihteki USD/TRY Kuru (manuel)</label><input type="number" inputMode="decimal" step="any" value={form.manualRate} onChange={e => setForm({ ...form, manualRate: e.target.value })} placeholder="örn. 44.20" style={{ ...inputStyle, border: '1px solid var(--accent)' }} /></div>
+                  <div style={{ marginBottom: '12px' }}><label style={{ ...labelStyle, color: 'var(--accent)' }}>O Tarihteki USD/TRY Kuru (manuel)</label><input type="number" inputMode="decimal" step="any" value={form.manualRate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, manualRate: e.target.value })} placeholder="örn. 44.20" style={{ ...inputStyle, border: '1px solid var(--accent)' }} /></div>
                 )}
               </div>
             ) : (
@@ -1174,8 +1174,8 @@ const Assets = () => {
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Ort. Maliyet (₺)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Adet</label><input type="number" inputMode="decimal" step="any" value={form.quantity} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, quantity: e.target.value })} placeholder="100" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Ort. Maliyet (₺)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setForm({ ...form, avg_cost: e.target.value })} placeholder="250" style={inputStyle} /></div>
                 </div>
               </div>
             )
@@ -1197,7 +1197,7 @@ const Assets = () => {
                   type="checkbox"
                   id="deductCashNewAsset"
                   checked={deductCashOnNewAsset}
-                  onChange={e => setDeductCashOnNewAsset(e.target.checked)}
+                  onChange={e = tabIndex={0} aria-label="Giriş alanı"> setDeductCashOnNewAsset(e.target.checked)}
                   style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                 />
                 <label htmlFor="deductCashNewAsset" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
@@ -1212,7 +1212,7 @@ const Assets = () => {
             </div>
           )}
           {error && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{error}</div>}
-          <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: '13px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: saving ? 0.7 : 1, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
+          <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: '13px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: saving ? 0.7 : 1, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }} role="button" tabIndex={0} aria-label="buton">
             {saving ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
         </div>
@@ -1279,15 +1279,15 @@ const Assets = () => {
                           </p>
                         )}
                         {isManualAsset && (
-                          <button onClick={() => openManualUpdateModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Güncelle</button>
+                          <button onClick={() = role="button" tabIndex={0} aria-label="buton"> openManualUpdateModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Güncelle</button>
                         )}
                         {!isManualAsset && (
                           <>
-                            <button onClick={() => openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
-                            <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
+                            <button onClick={() = role="button" tabIndex={0} aria-label="buton"> openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
+                            <button onClick={() = role="button" tabIndex={0} aria-label="buton"> openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
                           </>
                         )}
-                        <button onClick={() => handleDelete(asset.id)} style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '8px', color: 'var(--red)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Sil</button>
+                        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> handleDelete(asset.id)} style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '8px', color: 'var(--red)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Sil</button>
                       </div>
                     </div>
                   )

@@ -520,10 +520,10 @@ const Goals = () => {
 
       {/* Sayfa İçi Menü (Tabs) */}
       <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '4px', marginBottom: '20px', border: '1px solid var(--border)' }}>
-        <button onClick={() => setActiveTab('hedefler')} style={{ flex: 1, padding: '10px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', background: activeTab === 'hedefler' ? 'var(--accent)' : 'none', color: activeTab === 'hedefler' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
+        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setActiveTab('hedefler')} style={{ flex: 1, padding: '10px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', background: activeTab === 'hedefler' ? 'var(--accent)' : 'none', color: activeTab === 'hedefler' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
           🏆 Hedefler
         </button>
-        <button onClick={() => setActiveTab('fire')} style={{ flex: 1, padding: '10px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', background: activeTab === 'fire' ? 'var(--accent)' : 'none', color: activeTab === 'fire' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
+        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setActiveTab('fire')} style={{ flex: 1, padding: '10px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', background: activeTab === 'fire' ? 'var(--accent)' : 'none', color: activeTab === 'fire' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>
           🔥 FIRE & Tasarruf
         </button>
       </div>
@@ -702,7 +702,7 @@ const Goals = () => {
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showAssetList ? '▲ Gizle' : '▼ Göster'}</span>
               </div>
               {showAssetList && (
-                <button onClick={() => setShowAssetForm(!showAssetForm)}
+                <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowAssetForm(!showAssetForm)}
                   style={{ padding: '6px 12px', background: showAssetForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
                   {showAssetForm ? 'Kapat' : '+ Ekle'}
                 </button>
@@ -713,14 +713,14 @@ const Goals = () => {
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Ad</label>
-                  <input value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="örn. Ev, Arsa, Araba" style={inputStyle} />
+                  <input value={assetForm.name} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setAssetForm({ ...assetForm, name: e.target.value })} placeholder="örn. Ev, Arsa, Araba" style={inputStyle} />
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Değer (₺)</label>
-                  <input type="number" inputMode="decimal" step="any" value={assetForm.value_try} onChange={e => setAssetForm({ ...assetForm, value_try: e.target.value })} placeholder="5000000" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={assetForm.value_try} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setAssetForm({ ...assetForm, value_try: e.target.value })} placeholder="5000000" style={inputStyle} />
                 </div>
                 <button onClick={handleAddManualAsset}
-                  style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
+                  style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }} role="button" tabIndex={0} aria-label="buton">
                   Kaydet
                 </button>
               </div>
@@ -735,7 +735,7 @@ const Goals = () => {
                     <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{a.name}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '14px', fontWeight: '700' }}>{fc(a.value_try)}</span>
-                      <button onClick={() => handleDeleteManualAsset(a.id)}
+                      <button onClick={() = role="button" tabIndex={0} aria-label="buton"> handleDeleteManualAsset(a.id)}
                         style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '6px', color: 'var(--red)', padding: '4px 8px', fontSize: '11px', fontWeight: '700' }}>
                         Sil
                       </button>
@@ -758,7 +758,7 @@ const Goals = () => {
                   {totalLiabilitiesTRY > 0 ? `-${fc(totalLiabilitiesTRY)}` : '₺0'}
                 </span>
                 {showLiabilityList && (
-                  <button onClick={() => setShowLiabilityForm(!showLiabilityForm)}
+                  <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowLiabilityForm(!showLiabilityForm)}
                     style={{ padding: '6px 12px', background: showLiabilityForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
                     {showLiabilityForm ? 'Kapat' : '+ Ekle'}
                   </button>
@@ -770,12 +770,12 @@ const Goals = () => {
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Borç / Kredi Adı</label>
-                  <input value={liabilityForm.name} onChange={e => setLiabilityForm({ ...liabilityForm, name: e.target.value })} placeholder="örn. Konut Kredisi, Taşıt Kredisi, Kredi Kartı" style={inputStyle} />
+                  <input value={liabilityForm.name} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setLiabilityForm({ ...liabilityForm, name: e.target.value })} placeholder="örn. Konut Kredisi, Taşıt Kredisi, Kredi Kartı" style={inputStyle} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={labelStyle}>Kalan Tutar</label>
-                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.amount} onChange={e => setLiabilityForm({ ...liabilityForm, amount: e.target.value })} placeholder="450000" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.amount} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setLiabilityForm({ ...liabilityForm, amount: e.target.value })} placeholder="450000" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Para Birimi</label>
@@ -788,15 +788,15 @@ const Goals = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={labelStyle}>Aylık Taksit (opsiyonel)</label>
-                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.monthly_payment} onChange={e => setLiabilityForm({ ...liabilityForm, monthly_payment: e.target.value })} placeholder="15000" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.monthly_payment} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setLiabilityForm({ ...liabilityForm, monthly_payment: e.target.value })} placeholder="15000" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Faiz Oranı (%) (opsiyonel)</label>
-                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.interest_rate} onChange={e => setLiabilityForm({ ...liabilityForm, interest_rate: e.target.value })} placeholder="3.5" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.interest_rate} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setLiabilityForm({ ...liabilityForm, interest_rate: e.target.value })} placeholder="3.5" style={inputStyle} />
                   </div>
                 </div>
                 <button onClick={handleAddLiability}
-                  style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
+                  style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }} role="button" tabIndex={0} aria-label="buton">
                   Kaydet
                 </button>
               </div>
@@ -830,7 +830,7 @@ const Goals = () => {
                             <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>≈ {fc(tryVal)}</p>
                           )}
                         </div>
-                        <button onClick={() => handleDeleteLiability(l.id)}
+                        <button onClick={() = role="button" tabIndex={0} aria-label="buton"> handleDeleteLiability(l.id)}
                           style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '6px', color: 'var(--red)', padding: '4px 8px', fontSize: '11px', fontWeight: '700' }}>
                           Sil
                         </button>
@@ -855,11 +855,11 @@ const Goals = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💰 Tasarruf Oranı</p>
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => setShowManageSavings(!showManageSavings)}
+                <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowManageSavings(!showManageSavings)}
                   style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '700' }}>
                   {showManageSavings ? 'Kapat' : '⚙️ Düzenle'}
                 </button>
-                <button onClick={() => setShowSavingForm(!showSavingForm)}
+                <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowSavingForm(!showSavingForm)}
                   style={{ padding: '6px 12px', background: showSavingForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
                   {showSavingForm ? 'Kapat' : '+ Ekle'}
                 </button>
@@ -870,11 +870,11 @@ const Goals = () => {
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
 
                 <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', marginBottom: '14px', border: '1px solid var(--border)' }}>
-                  <button onClick={() => setSavingType('giris')}
+                  <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setSavingType('giris')}
                     style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'giris' ? '#10b981' : 'none', color: savingType === 'giris' ? 'white' : 'var(--text-secondary)' }}>
                     ↑ Giriş
                   </button>
-                  <button onClick={() => setSavingType('cekim')}
+                  <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setSavingType('cekim')}
                     style={{ flex: 1, padding: '9px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', background: savingType === 'cekim' ? 'var(--red)' : 'none', color: savingType === 'cekim' ? 'white' : 'var(--text-secondary)' }}>
                     ↓ Çekim
                   </button>
@@ -882,30 +882,30 @@ const Goals = () => {
 
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Ay</label>
-                  <input type="month" value={savingForm.month} onChange={e => setSavingForm({ ...savingForm, month: e.target.value })} style={inputStyle} />
+                  <input type="month" value={savingForm.month} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setSavingForm({ ...savingForm, month: e.target.value })} style={inputStyle} />
                 </div>
 
                 {savingType === 'giris' ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                     <div>
                       <label style={labelStyle}>Bu Girişteki Gelir (₺)</label>
-                      <input type="number" inputMode="decimal" step="any" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="76000" style={inputStyle} />
+                      <input type="number" inputMode="decimal" step="any" value={savingForm.income_try} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="76000" style={inputStyle} />
                     </div>
                     <div>
                       <label style={labelStyle}>Bu Girişteki Tasarruf (₺)</label>
-                      <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="60000" style={inputStyle} />
+                      <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="60000" style={inputStyle} />
                     </div>
                   </div>
                 ) : (
                   <div style={{ marginBottom: '10px' }}>
                     <label style={labelStyle}>Çekim Tutarı (₺)</label>
-                    <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="10000" style={{ ...inputStyle, border: '1px solid var(--red)' }} />
+                    <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="10000" style={{ ...inputStyle, border: '1px solid var(--red)' }} />
                   </div>
                 )}
 
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Not (opsiyonel)</label>
-                  <input value={savingForm.note} onChange={e => setSavingForm({ ...savingForm, note: e.target.value })} placeholder={savingType === 'cekim' ? 'örn. Acil ihtiyaç' : 'örn. Avans'} style={inputStyle} />
+                  <input value={savingForm.note} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setSavingForm({ ...savingForm, note: e.target.value })} placeholder={savingType === 'cekim' ? 'örn. Acil ihtiyaç' : 'örn. Avans'} style={inputStyle} />
                 </div>
 
                 <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
@@ -913,7 +913,7 @@ const Goals = () => {
                 </p>
 
                 <button onClick={handleAddSaving}
-                  style={{ width: '100%', padding: '10px', background: savingType === 'cekim' ? 'var(--red)' : 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
+                  style={{ width: '100%', padding: '10px', background: savingType === 'cekim' ? 'var(--red)' : 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }} role="button" tabIndex={0} aria-label="buton">
                   {savingType === 'cekim' ? 'Çekimi Kaydet' : 'Ekle'}
                 </button>
               </div>
@@ -933,7 +933,7 @@ const Goals = () => {
                         </span>
                         {s.note && <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px' }}>· {s.note}</span>}
                       </div>
-                      <button onClick={() => handleDeleteSaving(s.id)} 
+                      <button onClick={() = role="button" tabIndex={0} aria-label="buton"> handleDeleteSaving(s.id)} 
                         style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px', flexShrink: 0 }}>
                         ✕
                       </button>
@@ -1018,14 +1018,14 @@ const Goals = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🔥 FIRE Projeksiyonu</p>
               <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '8px', padding: '2px', border: '1px solid var(--border)' }}>
-                <button onClick={() => setFireMode('dinamik')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'dinamik' ? 'var(--accent)' : 'none', color: fireMode === 'dinamik' ? 'white' : 'var(--text-secondary)' }}>Dinamik</button>
-                <button onClick={() => setFireMode('sabit')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'sabit' ? 'var(--accent)' : 'none', color: fireMode === 'sabit' ? 'white' : 'var(--text-secondary)' }}>Sabit %8</button>
+                <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setFireMode('dinamik')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'dinamik' ? 'var(--accent)' : 'none', color: fireMode === 'dinamik' ? 'white' : 'var(--text-secondary)' }}>Dinamik</button>
+                <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setFireMode('sabit')} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', background: fireMode === 'sabit' ? 'var(--accent)' : 'none', color: fireMode === 'sabit' ? 'white' : 'var(--text-secondary)' }}>Sabit %8</button>
               </div>
             </div>
 
             <div style={{ marginBottom: '14px' }}>
               <label style={labelStyle}>Aylık Hedef Gider ($)</label>
-              <input type="number" inputMode="decimal" step="any" value={monthlyExpenseUSD} onChange={e => setMonthlyExpenseUSD(e.target.value)} placeholder="3300" style={inputStyle} />
+              <input type="number" inputMode="decimal" step="any" value={monthlyExpenseUSD} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setMonthlyExpenseUSD(e.target.value)} placeholder="3300" style={inputStyle} />
             </div>
 
             {!fireData ? (
@@ -1126,7 +1126,7 @@ const Goals = () => {
 
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
                         <label style={labelStyle}>Şu kadar yılda ulaşmak istersem, aylık ne kadar tasarruf gerekir?</label>
-                        <input type="number" inputMode="decimal" step="any" value={targetYearsInput} onChange={e => setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
+                        <input type="number" inputMode="decimal" step="any" value={targetYearsInput} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
 
                         {currentRequiredSaving !== null && (
                           <div style={{ marginTop: '10px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '10px', padding: '12px' }}>

@@ -91,8 +91,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
                 boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)'
               }}
-            >
-              🔄 Sayfayı Yenile
+             role="button" tabIndex={0} aria-label="buton">
+              Tekrar Dene
             </button>
           </div>
         </div>
