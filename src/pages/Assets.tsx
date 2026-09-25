@@ -7,7 +7,8 @@ import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions, deleteTransaction, syncInitialTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE, getTodayDate } from '../lib/constants'
+import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE } from '../lib/constants'
+import { getTodayDate } from '../lib/date'
 import { useAssetSearch } from '../hooks/useAssetSearch'
 import { AssetsSkeleton } from '../components/SkeletonLoaders'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -1056,7 +1057,7 @@ const Assets = () => {
           <div style={{ marginBottom: '16px' }}>
             <label style={labelStyle}>Varlık Türü</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {ASSET_TYPES.map(t => (
+              {ASSET_TYPES.filter(t => !['usd_nakit', 'eur_nakit'].includes(t.value)).map(t => (
                 <button key={t.value} onClick={() => setForm({
                   ...form,
                   type: t.value,
@@ -1237,7 +1238,12 @@ const Assets = () => {
             eur_nakit: '#2563eb'
           }
           const groups: Record<string, any[]> = {}
-          visibleAssets.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
+          visibleAssets.forEach(a => { 
+            let type = a.type;
+            if (type === 'usd_nakit' || type === 'eur_nakit') type = 'doviz';
+            if (!groups[type]) groups[type] = []; 
+            groups[type].push(a) 
+          })
           
           return Object.entries(groups).map(([type, items]) => {
             const typeColor = TYPE_COLORS[type] || '#6b7280'

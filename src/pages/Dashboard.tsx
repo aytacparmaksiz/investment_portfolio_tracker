@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { FALLBACK_USD_RATE } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
+import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
 import { fetchSnapshots } from '../lib/snapshot'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -21,6 +22,7 @@ const ASSET_LABELS: Record<string, string> = {
 const Dashboard = () => {
   const { user, signOut } = useAuth()
   const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, isHidden, setIsHidden } = usePortfolio()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const toast = useToast()
@@ -105,7 +107,10 @@ const Dashboard = () => {
       if (['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)) return true
       return Number(asset.quantity) > 0
     }).forEach(asset => {
-      const type = asset.type
+      let type = asset.type
+      if (type === 'usd_nakit' || type === 'eur_nakit') {
+        type = 'doviz'
+      }
       if (!groups[type]) groups[type] = {
         type, label: ASSET_LABELS[type] || type,
         name: ASSET_LABELS[type] || type,
@@ -214,6 +219,21 @@ const Dashboard = () => {
               $
             </button>
           </div>
+          <button 
+            onClick={toggleTheme} 
+            style={{ 
+              padding: '8px', 
+              background: 'var(--bg-card)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '10px', 
+              cursor: 'pointer', 
+              fontSize: '16px', 
+              color: 'var(--text-primary)' 
+            }}
+            aria-label="Temayı Değiştir"
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <button 
             onClick={() => setIsHidden(!isHidden)} 
             style={{ 
