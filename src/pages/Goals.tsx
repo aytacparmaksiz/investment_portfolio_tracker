@@ -5,6 +5,7 @@ import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
 import { fetchHistoricalRatesBatch } from '../lib/historicalRate'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts'
+import { GoalsSkeleton } from '../components/SkeletonLoaders'
 
 const GOAL_USD = 1000000
 const WITHDRAWAL_RATE = 0.04
@@ -504,14 +505,10 @@ const Goals = () => {
     fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600'
   }
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <p style={{ color: 'var(--text-secondary)' }}>Yükleniyor...</p>
-    </div>
-  )
+  if (loading) return <GoalsSkeleton />
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
+    <div className="page-container animate-in">
 
       {/* Başlık Alanı */}
       <div style={{ paddingTop: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -536,6 +533,7 @@ const Goals = () => {
       ========================================= */}
       {activeTab === 'hedefler' && (
         <>
+          <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
           {/* Gerçek Net Varlık Özet Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -619,7 +617,9 @@ const Goals = () => {
               </div>
             </div>
           </div>
+        </div>
 
+        <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
           {/* Ara Hedef (Milestone) Kartı - Gerçek Net Varlık Bazlı */}
           <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
@@ -691,7 +691,9 @@ const Goals = () => {
               </div>
             )}
           </div>
+        </div>
 
+        <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
           {/* Duran Varlıklar Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -715,7 +717,7 @@ const Goals = () => {
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Değer (₺)</label>
-                  <input type="number" value={assetForm.value_try} onChange={e => setAssetForm({ ...assetForm, value_try: e.target.value })} placeholder="5000000" style={inputStyle} />
+                  <input type="number" inputMode="decimal" step="any" value={assetForm.value_try} onChange={e => setAssetForm({ ...assetForm, value_try: e.target.value })} placeholder="5000000" style={inputStyle} />
                 </div>
                 <button onClick={handleAddManualAsset}
                   style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
@@ -773,7 +775,7 @@ const Goals = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={labelStyle}>Kalan Tutar</label>
-                    <input type="number" value={liabilityForm.amount} onChange={e => setLiabilityForm({ ...liabilityForm, amount: e.target.value })} placeholder="450000" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.amount} onChange={e => setLiabilityForm({ ...liabilityForm, amount: e.target.value })} placeholder="450000" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Para Birimi</label>
@@ -786,11 +788,11 @@ const Goals = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={labelStyle}>Aylık Taksit (opsiyonel)</label>
-                    <input type="number" value={liabilityForm.monthly_payment} onChange={e => setLiabilityForm({ ...liabilityForm, monthly_payment: e.target.value })} placeholder="15000" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.monthly_payment} onChange={e => setLiabilityForm({ ...liabilityForm, monthly_payment: e.target.value })} placeholder="15000" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Faiz Oranı (%) (opsiyonel)</label>
-                    <input type="number" value={liabilityForm.interest_rate} onChange={e => setLiabilityForm({ ...liabilityForm, interest_rate: e.target.value })} placeholder="3.5" style={inputStyle} />
+                    <input type="number" inputMode="decimal" step="any" value={liabilityForm.interest_rate} onChange={e => setLiabilityForm({ ...liabilityForm, interest_rate: e.target.value })} placeholder="3.5" style={inputStyle} />
                   </div>
                 </div>
                 <button onClick={handleAddLiability}
@@ -839,6 +841,7 @@ const Goals = () => {
               )
             )}
           </div>
+        </div>
         </>
       )}
 
@@ -886,17 +889,17 @@ const Goals = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                     <div>
                       <label style={labelStyle}>Bu Girişteki Gelir (₺)</label>
-                      <input type="number" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="76000" style={inputStyle} />
+                      <input type="number" inputMode="decimal" step="any" value={savingForm.income_try} onChange={e => setSavingForm({ ...savingForm, income_try: e.target.value })} placeholder="76000" style={inputStyle} />
                     </div>
                     <div>
                       <label style={labelStyle}>Bu Girişteki Tasarruf (₺)</label>
-                      <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="60000" style={inputStyle} />
+                      <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="60000" style={inputStyle} />
                     </div>
                   </div>
                 ) : (
                   <div style={{ marginBottom: '10px' }}>
                     <label style={labelStyle}>Çekim Tutarı (₺)</label>
-                    <input type="number" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="10000" style={{ ...inputStyle, border: '1px solid var(--red)' }} />
+                    <input type="number" inputMode="decimal" step="any" value={savingForm.amount_try} onChange={e => setSavingForm({ ...savingForm, amount_try: e.target.value })} placeholder="10000" style={{ ...inputStyle, border: '1px solid var(--red)' }} />
                   </div>
                 )}
 
@@ -1009,6 +1012,7 @@ const Goals = () => {
             )}
           </div>
 
+          <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
           {/* FIRE Projeksiyonu Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -1021,7 +1025,7 @@ const Goals = () => {
 
             <div style={{ marginBottom: '14px' }}>
               <label style={labelStyle}>Aylık Hedef Gider ($)</label>
-              <input type="number" value={monthlyExpenseUSD} onChange={e => setMonthlyExpenseUSD(e.target.value)} placeholder="3300" style={inputStyle} />
+              <input type="number" inputMode="decimal" step="any" value={monthlyExpenseUSD} onChange={e => setMonthlyExpenseUSD(e.target.value)} placeholder="3300" style={inputStyle} />
             </div>
 
             {!fireData ? (
@@ -1122,7 +1126,7 @@ const Goals = () => {
 
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
                         <label style={labelStyle}>Şu kadar yılda ulaşmak istersem, aylık ne kadar tasarruf gerekir?</label>
-                        <input type="number" value={targetYearsInput} onChange={e => setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
+                        <input type="number" inputMode="decimal" step="any" value={targetYearsInput} onChange={e => setTargetYearsInput(e.target.value)} placeholder="örn. 5" style={inputStyle} />
 
                         {currentRequiredSaving !== null && (
                           <div style={{ marginTop: '10px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '10px', padding: '12px' }}>
@@ -1232,6 +1236,7 @@ const Goals = () => {
               </div>
             )}
           </div>
+        </div>
         </>
       )}
 

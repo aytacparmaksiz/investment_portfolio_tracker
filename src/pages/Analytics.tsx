@@ -10,6 +10,7 @@ import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib
 import { buildBenchmarkSeries } from '../lib/benchmark'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useLocation } from 'react-router-dom'
+import { AnalyticsSkeleton, SkeletonBox } from '../components/SkeletonLoaders'
 
 const Analytics = () => {
   const { user } = useAuth()
@@ -256,12 +257,20 @@ const Analytics = () => {
     boxShadow: 'var(--shadow)'
   }
 
+  if (loading && assets.length === 0) {
+    return <AnalyticsSkeleton />
+  }
+
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
+    <div className="page-container animate-in">
 
       <div style={{ paddingTop: '16px', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Analitik</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Portföy performansı & Benchmark</p>
+        <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          {activeTab === 'varliklar' ? 'Varlık Performansı' : 'Portföy Performansı'}
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
+          {activeTab === 'varliklar' ? 'Kategori ve varlık bazlı kâr/zarar oranları' : 'Zaman serisi grafikleri & Benchmark kıyaslama'}
+        </p>
       </div>
 
       {/* Varlıklar Sekmesi */}
@@ -292,14 +301,14 @@ const Analytics = () => {
 
         return (
           <div>
-            <p style={{ fontWeight: '800', fontSize: '17px', marginBottom: '16px', color: 'var(--text-primary)' }}>Varlık Performansı</p>
             {filtered.length === 0 ? (
               <div style={{ ...card, textAlign: 'center', padding: '32px 0' }}>
                 <p style={{ fontSize: '32px', marginBottom: '8px' }}>📭</p>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Henüz varlık eklenmedi</p>
               </div>
             ) : (
-              sortedGroupEntries.map(([type, items]) => {
+              <div className="responsive-grid-2">
+                {sortedGroupEntries.map(([type, items]) => {
                 const isExpanded = expandedAssetGroups.has(type)
                 
                 let groupCost = 0
@@ -573,6 +582,7 @@ const Analytics = () => {
                   })}
                 </div>
               )})
+              }</div>
             )}
           </div>
         )
@@ -582,17 +592,17 @@ const Analytics = () => {
       {activeTab === 'performans' && (
         <>
           {(snapshotsLoading || (loading && chartData.length < 1)) ? (
-            <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                border: '3px solid var(--border)',
-                borderTopColor: 'var(--accent)',
-                borderRadius: '50%',
-                margin: '0 auto 12px',
-                animation: 'spin 0.8s linear infinite'
-              }} />
-              <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Performans verileri yükleniyor...</p>
+            <div style={{ ...card, padding: '24px 20px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px' }}>
+                {[1, 2, 3, 4, 5].map(i => (
+                  <SkeletonBox key={i} width="44px" height="28px" borderRadius="8px" />
+                ))}
+              </div>
+              <SkeletonBox width="100%" height="200px" borderRadius="12px" style={{ marginBottom: '16px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <SkeletonBox width="120px" height="18px" />
+                <SkeletonBox width="80px" height="18px" />
+              </div>
             </div>
           ) : chartData.length < 1 ? (
             <div style={{ ...card, textAlign: 'center', padding: '48px 16px' }}>
@@ -651,7 +661,7 @@ const Analytics = () => {
             </div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
                 {[
                   { label: 'Başlangıç', value: fc(first), color: 'var(--text-primary)' },
                   { label: 'Güncel', value: fc(last), color: 'var(--accent)' },
@@ -679,97 +689,100 @@ const Analytics = () => {
                 ))}
               </div>
 
-              {/* GRAFİK 1: Tüm Servet Büyümesi (BES Dahil) */}
-              <div style={{ ...card, marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div>
-                    <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
-                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      {ranges.find(r => r.value === range)?.label || ''} dönem değişimi:{' '}
-                      <strong style={{ color: totalGain >= 0 ? '#10b981' : '#ef4444' }}>
-                        {isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`}
-                      </strong>
-                    </p>
-                  </div>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    background: totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                    border: `1px solid ${totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                    color: totalGainPct >= 0 ? '#10b981' : '#ef4444',
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: '700'
-                  }}>
-                    <span>{totalGainPct >= 0 ? '▲' : '▼'}</span>
-                    <span>{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</span>
-                  </div>
-                </div>
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorDeger" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
-                    <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* GRAFİK 2: Tüm Servet Kar/Zarar */}
-              <div style={{ ...card, marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Kar/Zarar Performansı</p>
-                      <span title="Bu grafiğe BES performansı dahildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
+              {/* Yan Yana / Responsive Grafikler (Grafik 1 & 2) */}
+              <div className="responsive-grid-2">
+                {/* GRAFİK 1: Tüm Servet Büyümesi (BES Dahil) */}
+                <div style={{ ...card, marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Portföy Büyümesi</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {ranges.find(r => r.value === range)?.label || ''} dönem değişimi:{' '}
+                        <strong style={{ color: totalGain >= 0 ? '#10b981' : '#ef4444' }}>
+                          {isHidden ? '••••••' : `${totalGain >= 0 ? '+' : ''}${fc(totalGain)}`}
+                        </strong>
+                      </p>
                     </div>
-                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      {ranges.find(r => r.value === range)?.label || ''} net kâr değişimi:{' '}
-                      <strong style={{ color: profitDiff >= 0 ? '#10b981' : '#ef4444' }}>
-                        {isHidden ? '••••••' : `${profitDiff >= 0 ? '+' : ''}${fc(profitDiff)}`}
-                      </strong>
-                    </p>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                      border: `1px solid ${totalGainPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                      color: totalGainPct >= 0 ? '#10b981' : '#ef4444',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: '700'
+                    }}>
+                      <span>{totalGainPct >= 0 ? '▲' : '▼'}</span>
+                      <span>{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</span>
+                    </div>
                   </div>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    background: periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                    border: `1px solid ${periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                    color: periodProfitPct >= 0 ? '#10b981' : '#ef4444',
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: '700'
-                  }}>
-                    <span>{periodProfitPct >= 0 ? '▲' : '▼'}</span>
-                    <span>{periodProfitPct >= 0 ? '+' : ''}{periodProfitPct.toFixed(2)}%</span>
-                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorDeger" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                      <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                      <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                      <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
+                      <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorKar" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
-                    <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
-                    <Area type="monotone" dataKey="kar" name="kar" stroke={latestProfit >= 0 ? "#10b981" : "#ef4444"} fill="url(#colorKar)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+
+                {/* GRAFİK 2: Tüm Servet Kar/Zarar */}
+                <div style={{ ...card, marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Kar/Zarar Performansı</p>
+                        <span title="Bu grafiğe BES performansı dahildir." style={{ cursor: 'help', fontSize: '14px', color: 'var(--text-tertiary)' }}>ⓘ</span>
+                      </div>
+                      <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {ranges.find(r => r.value === range)?.label || ''} net kâr değişimi:{' '}
+                        <strong style={{ color: profitDiff >= 0 ? '#10b981' : '#ef4444' }}>
+                          {isHidden ? '••••••' : `${profitDiff >= 0 ? '+' : ''}${fc(profitDiff)}`}
+                        </strong>
+                      </p>
+                    </div>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                      border: `1px solid ${periodProfitPct >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                      color: periodProfitPct >= 0 ? '#10b981' : '#ef4444',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: '700'
+                    }}>
+                      <span>{periodProfitPct >= 0 ? '▲' : '▼'}</span>
+                      <span>{periodProfitPct >= 0 ? '+' : ''}{periodProfitPct.toFixed(2)}%</span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorKar" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                      <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                      <Tooltip formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                      <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+                      <Area type="monotone" dataKey="kar" name="kar" stroke={latestProfit >= 0 ? "#10b981" : "#ef4444"} fill="url(#colorKar)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
 
               {/* GRAFİK 3: Aktif Performans (QQQM) YARIŞI */}
@@ -860,7 +873,7 @@ const Analytics = () => {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>Yatırım Tutarı (₺)</label>
-                        <input type="number" value={compCost !== null ? compCost : Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()}
+                        <input type="number" inputMode="decimal" step="any" value={compCost !== null ? compCost : Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()} onChange={e => setCompCost(e.target.value)} placeholder={Math.round(initialActiveCost > 0 ? initialActiveCost : currentActiveCost).toString()}
                           style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }} />
                       </div>
                       <button onClick={async () => {

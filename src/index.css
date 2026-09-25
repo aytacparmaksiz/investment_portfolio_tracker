@@ -69,3 +69,137 @@ button:hover {
 button:active {
   transform: scale(0.97);
 }
+
+/* --- FAZ 4: RESPONSIVE LAYOUT & SKELETON STYLES --- */
+
+/* Responsive Page Container */
+.page-container {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 90px;
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .page-container {
+    max-width: 960px;
+    padding: 24px 28px 100px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-container {
+    max-width: 1100px;
+    padding: 28px 36px 100px;
+  }
+}
+
+/* Responsive Grid helpers */
+.responsive-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .responsive-grid-2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+}
+
+.responsive-grid-kpi {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 768px) {
+  .responsive-grid-kpi {
+    gap: 14px;
+  }
+}
+
+/* Responsive Bottom Navigation */
+.bottom-nav-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 16px;
+  z-index: 100;
+}
+
+.bottom-nav-content {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  justify-content: space-around;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+/* Responsive Modal (Bottom Sheet on mobile, Centered Modal on desktop) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px 20px 0 0;
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .modal-content {
+    border-radius: 20px;
+    max-width: 540px;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Shimmer & Skeleton Animations */
+@keyframes skeletonShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}

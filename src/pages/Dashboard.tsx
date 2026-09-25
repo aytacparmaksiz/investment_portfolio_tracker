@@ -8,6 +8,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
+import { DashboardSkeleton } from '../components/SkeletonLoaders'
 
 const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed', '#0891b2']
 
@@ -159,11 +160,7 @@ const Dashboard = () => {
 
   const fp = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      <p style={{ color: 'var(--text-secondary)' }}>Yükleniyor...</p>
-    </div>
-  )
+  if (loading) return <DashboardSkeleton />
 
   const card = {
     background: 'var(--bg-card)',
@@ -174,7 +171,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', paddingBottom: '90px', background: 'var(--bg-primary)', minHeight: '100vh' }}>
+    <div className="page-container animate-in">
 
       {(pullDistance > 0 || refreshing) && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: `${refreshing ? 50 : pullDistance}px`, transition: refreshing ? 'none' : 'height 0.1s', overflow: 'hidden' }}>
@@ -222,77 +219,71 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Ana Değer Kartı */}
-      <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '24px', marginBottom: '16px', boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>Toplam Portföy Değeri</p>
-        <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{activeAssets.length} varlık</p>
-        {dailyChange !== null && (
-          <div
-            style={{
-              display: 'inline-flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              marginTop: '14px',
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '10px',
-              padding: '8px 14px'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5',
-                fontWeight: 700
-              }}
-            >
-              <span>{dailyChange >= 0 ? '▲' : '▼'}</span>
+      <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
+        <div>
+          {/* Ana Değer Kartı */}
+          <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '24px', marginBottom: '16px', boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>Toplam Portföy Değeri</p>
+            <p style={{ fontSize: '36px', fontWeight: '800', color: 'white', letterSpacing: '-1px', marginBottom: '4px' }}>{fc(total)}</p>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginTop: '4px' }}>{activeAssets.length} varlık</p>
+            {dailyChange !== null && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  marginTop: '14px',
+                  background: 'rgba(255,255,255,0.15)',
+                  borderRadius: '10px',
+                  padding: '8px 14px'
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: dailyChange >= 0 ? '#a7f3d0' : '#fca5a5',
+                    fontWeight: 700
+                  }}
+                >
+                  <span>{dailyChange >= 0 ? '▲' : '▼'}</span>
 
-              <span>{fc(Math.abs(dailyChange))}</span>
+                  <span>{fc(Math.abs(dailyChange))}</span>
 
-              <span>
-                ({dailyChangePct >= 0 ? '+' : ''}
-                {dailyChangePct.toFixed(2)}%)
-              </span>
+                  <span>
+                    ({dailyChangePct >= 0 ? '+' : ''}
+                    {dailyChangePct.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
+              {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
+            </p>
+          </div>
+
+          {/* 3 Metrik Kart */}
+          <div className="responsive-grid-kpi" style={{ marginBottom: '16px' }}>
+            <div style={{ ...card, padding: '14px', minWidth: 0 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Yatırılan</p>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatExact(dispTotalCost, isDispUSD)}</p>
             </div>
-
-            <div
-              style={{
-                marginTop: '2px',
-                fontSize: '11px',
-                color: 'rgba(255,255,255,.75)'
-              }}
-            >
+            <div style={{ ...card, padding: '14px', minWidth: 0 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Kar/Zarar</p>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGain >= 0 ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {dispTotalGain >= 0 ? '+' : ''}{formatExact(dispTotalGain, isDispUSD)}
+              </p>
+            </div>
+            <div style={{ ...card, padding: '14px', minWidth: 0 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Getiri</p>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGainPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {fp(dispTotalGainPct)}
+              </p>
             </div>
           </div>
-        )}
-
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '10px' }}>
-          {pricesLoading ? '⏳ Fiyatlar güncelleniyor...' : lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : ''}
-        </p>
-      </div>
-
-      {/* 3 Metrik Kart */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-        <div style={{ ...card, padding: '14px', minWidth: 0 }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Yatırılan</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatExact(dispTotalCost, isDispUSD)}</p>
         </div>
-        <div style={{ ...card, padding: '14px', minWidth: 0 }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Kar/Zarar</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGain >= 0 ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {dispTotalGain >= 0 ? '+' : ''}{formatExact(dispTotalGain, isDispUSD)}
-          </p>
-        </div>
-        <div style={{ ...card, padding: '14px', minWidth: 0 }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Getiri</p>
-          <p style={{ fontSize: '13px', fontWeight: '700', color: dispTotalGainPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {fp(dispTotalGainPct)}
-          </p>
-        </div>
-      </div>
 
       {/* Dağılım */}
       {pieData.length > 0 && (
@@ -428,6 +419,7 @@ const Dashboard = () => {
           })()}
         </div>
       )}
+      </div>
 
       {/* Portföy Listesi */}
       <div style={{ ...card, marginBottom: '16px' }}>
