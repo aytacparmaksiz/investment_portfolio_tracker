@@ -259,7 +259,7 @@ const Assets = () => {
 
     // Senkronizasyon: update_asset_stats çağrıldığında kullanıcının el ile girdiği adet ve maliyet ezilmesin
     if (!['bes', 'vadeli', 'nakit'].includes(editAsset.type)) {
-      const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      const usdRate = isUsdType ? (prices['USDTRY=X'] || FALLBACK_USD_RATE) : undefined
       await syncInitialTransaction(editAsset.id, newQty, newCost, isUsdType, usdRate)
     }
 
@@ -372,14 +372,109 @@ const Assets = () => {
     if (!confirm('Bu işlemi silmek istediğinize emin misiniz? Ortalama maliyet yeniden hesaplanacak.')) return
     setTxSaving(true)
     setTxError('')
-    const { error } = await deleteTransaction(txId, txAsset.id)
-    if (error) { setTxError('Silme hatası: ' + error.message); setTxSaving(false); return }
+
+    // 1. Silinecek işlemi bul (önce geçmiş listesinden, yoksa Supabase'den sorgula)
+    let txToDelete = txHistory.find((t: any) => t.id === txId)
+    if (!txToDelete) {
+      const { data } = await supabase.from('transactions').select('*').eq('id', txId).maybeSingle()
+      txToDelete = data
+    }
+
+    if (!txToDelete) {
+      setTxError('Silinecek işlem kaydı bulunamadı.')
+      setTxSaving(false)
+      return
+    }
+
+    // 2. İşlemi sil ve istatistikleri yeniden hesaplat
+    const { error: delErr } = await deleteTransaction(txId, txAsset.id)
+    if (delErr) {
+      setTxError('Silme hatası: ' + delErr.message)
+      setTxSaving(false)
+      return
+    }
+
+    // 3. Nakit iadesi / düşümü (Cash Reversal)
+    let cashNotice = ''
+    const isUsdType = isUSD(txAsset.type)
+    const usdRate = Number(prices['USDTRY=X']) || FALLBACK_USD_RATE || 1
+    const effectiveRate = isUsdType ? (Number(txToDelete.try_rate) || usdRate) : 1
+    const rawTryTotal = txToDelete.try_total != null ? Number(txToDelete.try_total) : 0
+    const tryAmount = (isUsdType && rawTryTotal > 0)
+      ? rawTryTotal
+      : (Number(txToDelete.quantity || 0) * Number(txToDelete.price || 0) * effectiveRate)
+
+    if (tryAmount > 0) {
+      const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+      if (targetPid) {
+        // En güncel nakit varlığını doğrudan Supabase'den çek
+        const { data: dbCash } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('portfolio_id', targetPid)
+          .eq('type', 'nakit')
+          .maybeSingle()
+
+        const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+
+        if (txToDelete.type === 'buy') {
+          // Alım işlemi nakit düşmüştü, silinince nakite iade edilir (kredi)
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty + tryAmount) * 100) / 100
+            const { error: updErr } = await supabase
+              .from('assets')
+              .update({ quantity: newQty, avg_cost: 1 })
+              .eq('id', cashAsset.id)
+            if (updErr) {
+              console.error('Nakit güncelleme hatası:', updErr)
+            } else {
+              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
+            }
+          } else {
+            const { error: insErr } = await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Nakit (TL)',
+              symbol: 'TL',
+              type: 'nakit',
+              quantity: Math.round(tryAmount * 100) / 100,
+              avg_cost: 1
+            })
+            if (insErr) {
+              console.error('Nakit oluşturma hatası:', insErr)
+            } else {
+              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
+            }
+          }
+        } else if (txToDelete.type === 'sell') {
+          // Satış işlemi nakit eklemişti, silinince nakitten düşülür (borç)
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty - tryAmount) * 100) / 100
+            const { error: updErr } = await supabase
+              .from('assets')
+              .update({ quantity: newQty, avg_cost: 1 })
+              .eq('id', cashAsset.id)
+            if (updErr) {
+              console.error('Nakit düşme hatası:', updErr)
+            } else {
+              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakitten düşüldü)`
+            }
+          }
+        }
+      }
+    }
+
     const history = await fetchTransactions(txAsset.id)
     setTxHistory(history)
-    fetchData()
-    refresh(true)
+
+    const { data: updatedAsset } = await supabase.from('assets').select('*').eq('id', txAsset.id).maybeSingle()
+    if (updatedAsset) setTxAsset(updatedAsset)
+
+    await fetchData()
+    await refresh(true)
     setTxSaving(false)
-    setSuccess('İşlem silindi ve maliyet güncellendi.')
+    setSuccess(`İşlem silindi ve maliyet güncellendi.${cashNotice}`)
     setTimeout(() => setSuccess(''), 3000)
   }
 

@@ -98,7 +98,7 @@ export async function syncInitialTransaction(
 
   // 3. Tek bir işlem varsa veya ilk alış kaydını güncelle
   const targetTx = (txs.length === 1) ? txs[0] : (txs.find(t => t.type === 'buy') || txs[0])
-  const effectiveRate = tryRate || targetTx.try_rate
+  const effectiveRate = isUsd ? (tryRate || targetTx.try_rate) : null
   const updatePayload: any = {
     quantity,
     price: avgCost,
@@ -107,6 +107,9 @@ export async function syncInitialTransaction(
   if (effectiveRate) {
     updatePayload.try_rate = effectiveRate
     updatePayload.try_total = quantity * avgCost * effectiveRate
+  } else if (!isUsd) {
+    updatePayload.try_rate = null
+    updatePayload.try_total = null
   }
 
   const { error: updErr } = await supabase
@@ -116,17 +119,7 @@ export async function syncInitialTransaction(
 
   if (updErr) return { error: updErr }
 
-  // 4. Eğer birden fazla işlem varsa, kullanıcının doğrudan varlık kartını düzenlemesi
-  // sonucu oluşan yeni adet ve maliyetin update_asset_stats tarafından bozulmaması için
-  // diğer eski işlemleri temizle
-  if (txs.length > 1) {
-    const otherTxIds = txs.filter(t => t.id !== targetTx.id).map(t => t.id)
-    if (otherTxIds.length > 0) {
-      await supabase.from('transactions').delete().in('id', otherTxIds)
-    }
-  }
-
-  // 5. İstatistikleri yeniden hesapla
+  // 4. İstatistikleri yeniden hesapla
   const { error: fnErr } = await supabase.rpc('update_asset_stats', {
     p_asset_id: assetId
   })
