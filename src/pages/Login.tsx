@@ -72,7 +72,7 @@ const Login = () => {
           <input
             type="email"
             value={email}
-            onChange={(e) = tabIndex={0} aria-label="Giriş alanı"> setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             placeholder="ornek@email.com"
             style={inputStyle}
           />
@@ -83,7 +83,7 @@ const Login = () => {
           <input
             type="password"
             value={password}
-            onChange={(e) = tabIndex={0} aria-label="Giriş alanı"> setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="********"
             style={inputStyle}
           />
@@ -105,7 +105,7 @@ const Login = () => {
             marginBottom: '16px',
             opacity: loading ? 0.7 : 1,
           }}
-         role="button" tabIndex={0} aria-label="buton">
+        >
           {loading ? 'Lutfen bekle...' : isSignUp ? 'Kayit Ol' : 'Giris Yap'}
         </button>
 
@@ -125,7 +125,7 @@ const Login = () => {
               fontSize: '14px',
               textDecoration: 'underline',
             }}
-           role="button" tabIndex={0} aria-label="buton">
+          >
             {isSignUp ? 'Giris Yap' : 'Kayit Ol'}
           </button>
         </p>

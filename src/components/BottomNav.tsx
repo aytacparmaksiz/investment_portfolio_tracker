@@ -22,7 +22,7 @@ const BottomNav = () => {
           return (
             <button
               key={item.path}
-              onClick={() = role="button" tabIndex={0} aria-label="buton"> navigate(item.path)}
+              onClick={() => navigate(item.path)}
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
               tabIndex={0}
@@ -66,7 +66,7 @@ const BottomNav = () => {
             cursor: 'pointer',
             transition: 'color 0.15s ease, transform 0.15s ease'
           }}
-         role="button">
+        >
           <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">
             {theme === 'dark' ? '☀️' : '🌙'}
           </span>

@@ -189,17 +189,17 @@ const Dashboard = () => {
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border)' }}>
-            <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setDisplayCurrency('TRY')}
+            <button onClick={() => setDisplayCurrency('TRY')}
               style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)' }}>
               ₺
             </button>
-            <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setDisplayCurrency('USD')}
+            <button onClick={() => setDisplayCurrency('USD')}
               style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)' }}>
               $
             </button>
           </div>
           <button 
-            onClick={() = role="button" tabIndex={0} aria-label="buton"> setIsHidden(!isHidden)} 
+            onClick={() => setIsHidden(!isHidden)} 
             style={{ 
               padding: '8px 12px', 
               background: 'var(--bg-card)', 
@@ -213,7 +213,7 @@ const Dashboard = () => {
           >
             {isHidden ? '👁️ Göster' : '🔒 Gizle'}
           </button>
-          <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', boxShadow: 'var(--shadow)' }} role="button" tabIndex={0} aria-label="buton">
+          <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', boxShadow: 'var(--shadow)' }}>
             Çıkış
           </button>
         </div>
@@ -337,7 +337,7 @@ const Dashboard = () => {
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                     {selectedStrategy && (
-                      <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setSelectedStrategy(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', fontWeight: '700', padding: '4px 8px', color: 'var(--text-secondary)' }}>← Geri</button>
+                      <button onClick={() => setSelectedStrategy(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', fontWeight: '700', padding: '4px 8px', color: 'var(--text-secondary)' }}>← Geri</button>
                     )}
                     <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
                       {selectedStrategy ? `${selectedStrategy} Stratejisi Detayı` : `${group.label} — Strateji Dağılımı`}
@@ -508,7 +508,7 @@ const Dashboard = () => {
       </div>
 
       {/* Yenile */}
-      <button onClick={() = role="button" tabIndex={0} aria-label="buton"> refresh(true)} disabled={pricesLoading}
+      <button onClick={() => refresh(true)} disabled={pricesLoading}
         style={{ width: '100%', padding: '13px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', color: pricesLoading ? 'var(--text-tertiary)' : 'var(--accent)', fontSize: '14px', fontWeight: '600', marginBottom: '12px', boxShadow: 'var(--shadow)', transition: 'all 0.2s' }}>
         {pricesLoading ? '⏳ Güncelleniyor...' : '🔄 Fiyatları Yenile'}
       </button>
@@ -519,7 +519,7 @@ const Dashboard = () => {
           <div>
             <p style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>👥 Portföyünü Paylaş</p>
           </div>
-          <button onClick={() = role="button" tabIndex={0} aria-label="buton"> setShowInvite(!showInvite)}
+          <button onClick={() => setShowInvite(!showInvite)}
             style={{ padding: '7px 14px', background: showInvite ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>
             {showInvite ? 'Kapat' : 'Davet Et'}
           </button>
@@ -527,11 +527,11 @@ const Dashboard = () => {
         {showInvite && (
           <div style={{ marginTop: '14px' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="email" value={inviteEmail} onChange={e = tabIndex={0} aria-label="Giriş alanı"> setInviteEmail(e.target.value)}
+              <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 placeholder="esim@email.com"
                 style={{ flex: 1, padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)', fontSize: '14px' }} />
               <button onClick={handleInvite}
-                style={{ padding: '10px 16px', background: 'var(--accent)', borderRadius: '10px', color: 'white', fontWeight: '600', fontSize: '14px' }} role="button" tabIndex={0} aria-label="buton">
+                style={{ padding: '10px 16px', background: 'var(--accent)', borderRadius: '10px', color: 'white', fontWeight: '600', fontSize: '14px' }}>
                 Gönder
               </button>
             </div>
