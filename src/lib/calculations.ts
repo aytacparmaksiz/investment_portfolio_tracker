@@ -1,8 +1,9 @@
 import type { Asset } from '../types/index.ts';
 import { FALLBACK_USD_RATE } from './constants.ts';
 
-export const isUSD = (type: string): boolean => {
-  return ['usd_hisse', 'kripto', 'etf', 'usd_nakit'].includes(type);
+export const isUSD = (type: string, symbol?: string): boolean => {
+  if (type === 'doviz') return symbol === 'USD';
+  return ['usd_hisse', 'kripto', 'etf'].includes(type);
 };
 
 export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> = {}, usdtry: number = FALLBACK_USD_RATE): number => {
@@ -37,12 +38,11 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  if (a.type === 'usd_nakit') {
-    return Number(a.quantity || 0) * usdtry;
-  }
-
-  if (a.type === 'eur_nakit') {
-    return Number(a.quantity || 0) * (fetchedPrices['EURTRY=X'] || (usdtry * 1.08));
+  if (a.type === 'doviz') {
+    if (a.symbol === 'USD') return Number(a.quantity || 0) * usdtry;
+    if (a.symbol === 'EUR') return Number(a.quantity || 0) * (fetchedPrices['EURTRY=X'] || (usdtry * 1.08));
+    const price = fetchedPrices[`${a.symbol}TRY=X`] || usdtry; // fallback
+    return Number(a.quantity || 0) * price;
   }
 
   const sym = a.symbol ? a.symbol.trim() : '';
@@ -55,7 +55,7 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
   }
 
   // Fallbacks if price is not fetched
-  if (isUSD(a.type)) {
+  if (isUSD(a.type, a.symbol)) {
     return Number(a.avg_cost || 0) * usdtry * Number(a.quantity || 0);
   }
 
@@ -77,15 +77,13 @@ export const getCostValue = (a: Asset, usdtry: number = FALLBACK_USD_RATE): numb
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  if (a.type === 'usd_nakit') {
+  if (a.type === 'doviz') {
+    if (a.symbol === 'USD') return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
+    if (a.symbol === 'EUR') return Number(a.quantity || 0) * Number(a.avg_cost || (usdtry * 1.08));
     return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
   }
 
-  if (a.type === 'eur_nakit') {
-    return Number(a.quantity || 0) * Number(a.avg_cost || (usdtry * 1.08));
-  }
-
-  if (isUSD(a.type)) {
+  if (isUSD(a.type, a.symbol)) {
     if (a.total_try_cost) return Number(a.total_try_cost);
     return Number(a.avg_cost || 0) * Number(a.quantity || 0) * usdtry;
   }

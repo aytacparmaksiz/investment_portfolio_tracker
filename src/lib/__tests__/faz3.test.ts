@@ -18,21 +18,21 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
 // ============================================================================
 {
   const typeValues = ASSET_TYPES.map(t => t.value)
-  assert(typeValues.includes('usd_nakit'), 'ASSET_TYPES includes usd_nakit')
-  assert(typeValues.includes('eur_nakit'), 'ASSET_TYPES includes eur_nakit')
-  assert(ASSET_LABELS['usd_nakit'] === '💵 USD Nakit', `ASSET_LABELS[usd_nakit] is "💵 USD Nakit", got "${ASSET_LABELS['usd_nakit']}"`)
-  assert(ASSET_LABELS['eur_nakit'] === '💶 EUR Nakit', `ASSET_LABELS[eur_nakit] is "💶 EUR Nakit", got "${ASSET_LABELS['eur_nakit']}"`)
+  assert(typeValues.includes('doviz'), 'ASSET_TYPES includes doviz')
+  
+  
+  assert(ASSET_LABELS['doviz'] === '💱 Döviz', 'ASSET_LABELS[doviz] is correct')
 }
 
 // ============================================================================
 // 2. Currency Identification (isUSD)
 // ============================================================================
 {
-  assert(isUSD('usd_nakit') === true, 'isUSD recognizes usd_nakit')
+  assert(isUSD('doviz', 'USD') === true, 'isUSD recognizes doviz USD')
   assert(isUSD('usd_hisse') === true, 'isUSD recognizes usd_hisse')
   assert(isUSD('etf') === true, 'isUSD recognizes etf')
   assert(isUSD('kripto') === true, 'isUSD recognizes kripto')
-  assert(isUSD('eur_nakit') === false, 'isUSD returns false for eur_nakit')
+  assert(isUSD('doviz', 'EUR') === false, 'isUSD returns false for doviz EUR')
   assert(isUSD('nakit') === false, 'isUSD returns false for nakit (TRY)')
   assert(isUSD('hisse') === false, 'isUSD returns false for hisse (BIST)')
   assert(isUSD('bes') === false, 'isUSD returns false for bes')
@@ -51,7 +51,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
     portfolio_id: 'p1',
     name: 'USD Nakit',
     symbol: 'USD',
-    type: 'usd_nakit',
+    type: 'doviz', symbol: 'USD',
     quantity: 2500,
     avg_cost: 32.0, // Acquired at 32 TRY / USD
     created_at: '2026-01-01'
@@ -77,7 +77,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
     portfolio_id: 'p1',
     name: 'EUR Nakit',
     symbol: 'EUR',
-    type: 'eur_nakit',
+    type: 'doviz', symbol: 'EUR',
     quantity: 1000,
     avg_cost: 36.0,
     created_at: '2026-01-01'
@@ -128,7 +128,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
     usdRate: number
   ) {
     const list = assets.map(a => ({ ...a }))
-    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'usd_nakit') : null
+    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'doviz' && a.symbol === 'USD') : null
     let notice = ''
 
     if (isUsdType && usdCash) {
@@ -156,7 +156,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
     usdRate: number
   ) {
     const list = assets.map(a => ({ ...a }))
-    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'usd_nakit') : null
+    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'doviz' && a.symbol === 'USD') : null
     let notice = ''
 
     if (isUsdType && usdCash) {
@@ -188,7 +188,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
     usdRate: number
   ) {
     const list = assets.map(a => ({ ...a }))
-    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'usd_nakit') : null
+    const usdCash = isUsdType ? list.find(a => a.portfolio_id === targetPid && a.type === 'doviz' && a.symbol === 'USD') : null
     let notice = ''
 
     if (isUsdType && usdCash) {
@@ -217,13 +217,13 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
   }
 
   const initialAssets: AssetRecord[] = [
-    { id: 'c1', portfolio_id: 'p1', name: 'USD Nakit', type: 'usd_nakit', quantity: 1000 },
+    { id: 'c1', portfolio_id: 'p1', name: 'USD Nakit', type: 'doviz', symbol: 'USD', quantity: 1000 },
     { id: 'c2', portfolio_id: 'p1', name: 'TL Nakit', type: 'nakit', quantity: 50000 }
   ]
 
   // Scenario 4A: Buy USD stock (AAPL: 5 shares @ $150 = $750) -> Deducted from USD cash
   const buyRes = simulateBuy(initialAssets, 'p1', true, 150, 5, 35)
-  const usdAfterBuy = buyRes.assets.find(a => a.type === 'usd_nakit')!
+  const usdAfterBuy = buyRes.assets.find(a => a.type === 'doviz' && a.symbol === 'USD')!
   const tryAfterBuy = buyRes.assets.find(a => a.type === 'nakit')!
   assert(usdAfterBuy.quantity === 250, `USD Cash decreased by $750 to $250 (got ${usdAfterBuy.quantity})`)
   assert(tryAfterBuy.quantity === 50000, `TL Cash remained untouched at 50000 (got ${tryAfterBuy.quantity})`)
@@ -231,17 +231,17 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
 
   // Scenario 4B: Revert the buy transaction -> USD cash refunded
   const revBuyRes = simulateDeleteTx(buyRes.assets, 'p1', true, 'buy', 150, 5, 35)
-  const usdAfterRev = revBuyRes.assets.find(a => a.type === 'usd_nakit')!
+  const usdAfterRev = revBuyRes.assets.find(a => a.type === 'doviz' && a.symbol === 'USD')!
   assert(usdAfterRev.quantity === 1000, `USD Cash restored to $1000 after buy deletion (got ${usdAfterRev.quantity})`)
 
   // Scenario 4C: Sell USD stock (NVDA: 2 shares @ $500 = $1000) -> Credited to USD cash
   const sellRes = simulateSell(initialAssets, 'p1', true, 500, 2, 35)
-  const usdAfterSell = sellRes.assets.find(a => a.type === 'usd_nakit')!
+  const usdAfterSell = sellRes.assets.find(a => a.type === 'doviz' && a.symbol === 'USD')!
   assert(usdAfterSell.quantity === 2000, `USD Cash increased by $1000 to $2000 (got ${usdAfterSell.quantity})`)
 
   // Scenario 4D: Revert the sell transaction -> USD cash debited back
   const revSellRes = simulateDeleteTx(sellRes.assets, 'p1', true, 'sell', 500, 2, 35)
-  const usdAfterRevSell = revSellRes.assets.find(a => a.type === 'usd_nakit')!
+  const usdAfterRevSell = revSellRes.assets.find(a => a.type === 'doviz' && a.symbol === 'USD')!
   assert(usdAfterRevSell.quantity === 1000, `USD Cash debited back to $1000 after sell deletion (got ${usdAfterRevSell.quantity})`)
 
   // Scenario 4E: USD Buy when user has NO USD cash -> Falls back to TL cash
@@ -261,7 +261,7 @@ console.log('--- TEST SUITE: Faz 3 Multi-Currency Cash & Liabilities ---\n')
 
   const portfolioAssets: Asset[] = [
     { id: 'a1', portfolio_id: 'p1', name: 'THYAO', symbol: 'THYAO.IS', type: 'hisse', quantity: 1000, avg_cost: 300, created_at: '2026-01-01' },
-    { id: 'a2', portfolio_id: 'p1', name: 'USD Nakit', symbol: 'USD', type: 'usd_nakit', quantity: 10000, avg_cost: 34, created_at: '2026-01-01' }
+    { id: 'a2', portfolio_id: 'p1', name: 'USD Nakit', symbol: 'USD', type: 'doviz', symbol: 'USD', quantity: 10000, avg_cost: 34, created_at: '2026-01-01' }
   ]
   const prices = {
     'THYAO.IS': 320,

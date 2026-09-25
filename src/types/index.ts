@@ -8,9 +8,7 @@ export type AssetType =
   | 'fon'
   | 'bes'
   | 'vadeli'
-  | 'nakit'
-  | 'usd_nakit'
-  | 'eur_nakit';
+  | 'nakit';
 
 export interface Asset {
   id: string;

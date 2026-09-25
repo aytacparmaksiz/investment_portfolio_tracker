@@ -16,7 +16,7 @@ const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed'
 const ASSET_LABELS: Record<string, string> = {
   hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: 'Kripto',
   etf: 'ETF', doviz: 'Döviz', altin: 'Altın', fon: 'TEFAS Fon', bes: 'BES', vadeli: 'Vadeli Mevduat',
-  nakit: 'TRY Nakit', usd_nakit: 'USD Nakit', eur_nakit: 'EUR Nakit'
+  nakit: 'Nakit (TL)'
 }
 
 const Dashboard = () => {
@@ -104,11 +104,11 @@ const Dashboard = () => {
   const groupByType = () => {
     const groups: Record<string, any> = {}
     assets.filter((asset: any) => {
-      if (['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)) return true
+      if (['bes', 'vadeli', 'nakit', 'doviz'].includes(asset.type)) return true
       return Number(asset.quantity) > 0
     }).forEach(asset => {
       let type = asset.type
-      if (type === 'usd_nakit' || type === 'eur_nakit') {
+      if (type === 'doviz') {
         type = 'doviz'
       }
       if (!groups[type]) groups[type] = {
@@ -123,7 +123,7 @@ const Dashboard = () => {
 
       const isUSDAsset = isUSD(asset.type)
       const isUsdDoviz = asset.type === 'doviz' && (asset.symbol?.toUpperCase() === 'USD' || !asset.symbol)
-      const isUsdCash = asset.type === 'usd_nakit'
+      const isUsdCash = (asset.type === 'doviz' && asset.symbol === 'USD')
       const assetCostUSD = isUsdCash
         ? Number(asset.quantity || 0)
         : isUSDAsset
@@ -140,7 +140,7 @@ const Dashboard = () => {
   }
 
   const pieData = groupByType()
-  const activeAssets = assets.filter((a: any) => ['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(a.type) || Number(a.quantity) > 0)
+  const activeAssets = assets.filter((a: any) => ['bes', 'vadeli', 'nakit', 'doviz'].includes(a.type) || Number(a.quantity) > 0)
   
   const total = activeAssets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRate), 0)
   const totalCost = activeAssets.reduce((sum, a) => sum + getCostValue(a, usdRate), 0)
@@ -148,7 +148,7 @@ const Dashboard = () => {
   const totalCostUSD = activeAssets.reduce((sum, a) => {
     const isUSDAsset = isUSD(a.type)
     const isUsdDoviz = a.type === 'doviz' && (a.symbol?.toUpperCase() === 'USD' || !a.symbol)
-    if (a.type === 'usd_nakit') {
+    if ((a.type === 'doviz' && a.symbol === 'USD')) {
       return sum + Number(a.quantity || 0)
     }
     if (isUSDAsset) {
