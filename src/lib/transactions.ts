@@ -1,4 +1,5 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.ts'
+import { getTodayDate } from './constants.ts'
 
 export async function addTransaction(
   assetId: string,
@@ -85,7 +86,7 @@ export async function syncInitialTransaction(
       quantity,
       price: avgCost,
       total: quantity * avgCost,
-      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_date: getTodayDate(),
       note: 'Başlangıç Alımı'
     }
     if (isUsd && tryRate) {

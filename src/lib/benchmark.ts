@@ -1,3 +1,5 @@
+import { getTodayDate } from './constants.ts';
+
 export interface SnapshotRecord {
   snapshot_date: string;
   total_value: number;
@@ -38,7 +40,7 @@ export function findClosestPrice(
     return livePrice && livePrice > 0 ? livePrice : 0;
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayDate();
   if (targetDate >= todayStr && livePrice && livePrice > 0) {
     return livePrice;
   }

@@ -1,5 +1,5 @@
 import type { Asset } from '../types/index.ts'
-import { FALLBACK_USD_RATE } from './constants.ts'
+import { FALLBACK_USD_RATE, getTodayDate } from './constants.ts'
 import { isPerformanceAsset, getCostValue, getCurrentValue } from './calculations.ts'
 import { fetchHistoricalPrices } from './comparison.ts'
 import { findClosestPrice, type SnapshotRecord } from './benchmark.ts'
@@ -107,7 +107,7 @@ export function calculateAssetUnitPriceTRY(
   }
 
   if (asset.type === 'fon') {
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getTodayDate()
     const startCost = Number(asset.avg_cost || livePrice)
     if (date >= todayStr) return livePrice
 

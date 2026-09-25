@@ -30,3 +30,6 @@ export const SECTOR_OPTIONS = [
   'Hammadde',
   'Diğer'
 ];
+
+export { getTodayDate } from './date.ts';
+

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { FALLBACK_USD_RATE } from '../lib/constants'
+import { FALLBACK_USD_RATE, getTodayDate } from '../lib/constants'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
@@ -29,7 +29,7 @@ const Goals = () => {
   const [showReturnDetails, setShowReturnDetails] = useState(false)
   
   const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
-  const [savingForm, setSavingForm] = useState({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '', note: '' })
+  const [savingForm, setSavingForm] = useState({ month: getTodayDate().slice(0, 7), amount_try: '', income_try: '', note: '' })
   
   const [historicalRates, setHistoricalRates] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -211,7 +211,7 @@ const Goals = () => {
     const sabitAylikGetiri = Math.pow(1.08, 1 / 12) - 1
 
     // Tasarruf Hesaplaması (Son 12 ay veya mevcut tüm aylar)
-    const oneYearAgoMonth = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 7)
+    const oneYearAgoMonth = getTodayDate(new Date(Date.now() - 365 * 86400000)).slice(0, 7)
     let candidateSavings = savings.filter(s => String(s.month).slice(0, 7) >= oneYearAgoMonth)
     if (candidateSavings.length === 0) {
       candidateSavings = savings
@@ -347,7 +347,7 @@ const Goals = () => {
       note: savingForm.note || (savingType === 'cekim' ? 'Çekim' : null)
     })
 
-    setSavingForm({ month: new Date().toISOString().slice(0, 7), amount_try: '', income_try: '', note: '' })
+    setSavingForm({ month: getTodayDate().slice(0, 7), amount_try: '', income_try: '', note: '' })
     setSavingType('giris')
     setShowSavingForm(false)
     fetchData()

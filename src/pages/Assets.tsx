@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions, deleteTransaction, syncInitialTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE } from '../lib/constants'
+import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE, getTodayDate } from '../lib/constants'
 import { useAssetSearch } from '../hooks/useAssetSearch'
 
 const Assets = () => {
@@ -24,8 +24,8 @@ const Assets = () => {
 
   const [form, setForm] = useState({
     type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
-    interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0],
-    txDate: new Date().toISOString().split('T')[0], manualRate: '', strategy: 'Core', sector: ''
+    interest_rate: '', maturity_days: '', coingecko_id: '', start_date: getTodayDate(),
+    txDate: getTodayDate(), manualRate: '', strategy: 'Core', sector: ''
   })
   const [rateNotFound, setRateNotFound] = useState(false)
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set())
@@ -39,7 +39,7 @@ const Assets = () => {
 
   const [txAsset, setTxAsset] = useState<any | null>(null)
   const [txType, setTxType] = useState<'buy' | 'sell'>('buy')
-  const [txForm, setTxForm] = useState({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
+  const [txForm, setTxForm] = useState({ quantity: '', price: '', tryTotal: '', date: getTodayDate(), note: '', manualRate: '' })
   const [txRateNotFound, setTxRateNotFound] = useState(false)
   const [txHistory, setTxHistory] = useState<any[]>([])
   const [txSaving, setTxSaving] = useState(false)
@@ -57,7 +57,7 @@ const Assets = () => {
   
   const [manualAsset, setManualAsset] = useState<any | null>(null)
   const [manualForm, setManualForm] = useState({
-    value: '', principal: '', interest_rate: '', maturity_days: '', start_date: new Date().toISOString().split('T')[0]
+    value: '', principal: '', interest_rate: '', maturity_days: '', start_date: getTodayDate()
   })
   const [manualSaving, setManualSaving] = useState(false)
   const [manualError, setManualError] = useState('')
@@ -162,13 +162,13 @@ const Assets = () => {
         await supabase.from('assets').update({ quantity: Number(form.manual_value), avg_cost: 1, symbol: null }).eq('id', asset.id)
       }
       if (isVadeli && form.interest_rate && form.maturity_days) {
-        const maturityDate = new Date(form.start_date)
-        maturityDate.setDate(maturityDate.getDate() + Number(form.maturity_days))
+        const [y, m, d] = (form.start_date || getTodayDate()).split('-').map(Number)
+        const maturityDate = new Date(Date.UTC(y, m - 1, d + Number(form.maturity_days), 12, 0, 0))
         await supabase.from('assets').update({
           principal: Number(form.manual_value),
           interest_rate: Number(form.interest_rate),
           maturity_days: Number(form.maturity_days),
-          maturity_date: maturityDate.toISOString().split('T')[0],
+          maturity_date: getTodayDate(maturityDate),
           start_date: form.start_date,
           symbol: null
         }).eq('id', asset.id)
@@ -210,7 +210,7 @@ const Assets = () => {
     }
 
     setSuccess(`Varlık başarıyla eklendi!${newAssetCashNotice}`)
-    setForm({ type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '', interest_rate: '', maturity_days: '', coingecko_id: '', start_date: new Date().toISOString().split('T')[0], txDate: new Date().toISOString().split('T')[0], manualRate: '', strategy: 'Core', sector: '' })
+    setForm({ type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '', interest_rate: '', maturity_days: '', coingecko_id: '', start_date: getTodayDate(), txDate: getTodayDate(), manualRate: '', strategy: 'Core', sector: '' })
     setRateNotFound(false)
     setShowForm(false)
     fetchData()
@@ -283,7 +283,7 @@ const Assets = () => {
     setTxType('buy')
     setCreditCashOnSell(true)
     setDeductCashOnBuy(true)
-    setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
+    setTxForm({ quantity: '', price: '', tryTotal: '', date: getTodayDate(), note: '', manualRate: '' })
     setTxRateNotFound(false)
     setTxError('')
     const history = await fetchTransactions(asset.id)
@@ -359,7 +359,7 @@ const Assets = () => {
 
     const history = await fetchTransactions(txAsset.id)
     setTxHistory(history)
-    setTxForm({ quantity: '', price: '', tryTotal: '', date: new Date().toISOString().split('T')[0], note: '', manualRate: '' })
+    setTxForm({ quantity: '', price: '', tryTotal: '', date: getTodayDate(), note: '', manualRate: '' })
     setTxRateNotFound(false)
     setTxSaving(false)
     fetchData()
@@ -488,7 +488,7 @@ const Assets = () => {
       principal: asset.principal ? String(asset.principal) : asset.avg_cost ? String(asset.avg_cost) : '',
       interest_rate: asset.interest_rate ? String(asset.interest_rate) : '',
       maturity_days: '',
-      start_date: asset.start_date || new Date().toISOString().split('T')[0]
+      start_date: asset.start_date || getTodayDate()
     })
   }
   
@@ -518,9 +518,9 @@ const Assets = () => {
       if (manualForm.start_date) updatePayload.start_date = manualForm.start_date
       if (manualForm.maturity_days) {
         updatePayload.maturity_days = Number(manualForm.maturity_days)
-        const maturityDate = new Date(manualForm.start_date)
-        maturityDate.setDate(maturityDate.getDate() + Number(manualForm.maturity_days))
-        updatePayload.maturity_date = maturityDate.toISOString().split('T')[0]
+        const [y, m, d] = (manualForm.start_date || getTodayDate()).split('-').map(Number)
+        const maturityDate = new Date(Date.UTC(y, m - 1, d + Number(manualForm.maturity_days), 12, 0, 0))
+        updatePayload.maturity_date = getTodayDate(maturityDate)
       }
       const { error } = await supabase.from('assets').update(updatePayload).eq('id', manualAsset.id)
       if (error) { setManualError(error.message); setManualSaving(false); return }

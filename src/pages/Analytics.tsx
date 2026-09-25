@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { FALLBACK_USD_RATE } from '../lib/constants'
+import { FALLBACK_USD_RATE, getTodayDate } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { supabase } from '../lib/supabase'
@@ -8,7 +8,6 @@ import { calculateComparison, fetchHistoricalPrices } from '../lib/comparison'
 import { fetchPrice } from '../lib/prices'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
 import { buildBenchmarkSeries } from '../lib/benchmark'
-import { reconstructPortfolioHistory, batchSaveSnapshots } from '../lib/portfolioHistory'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useLocation } from 'react-router-dom'
 
@@ -41,7 +40,7 @@ const Analytics = () => {
   useEffect(() => {
     let isCancelled = false
     const loadBenchmark = async () => {
-      const fromDate = new Date(Date.now() - range * 86400000).toISOString().split('T')[0]
+      const fromDate = getTodayDate(new Date(Date.now() - range * 86400000))
       try {
         const [qqqmData, usdData, liveQqqmData] = await Promise.all([
           fetchHistoricalPrices('QQQM', fromDate),
@@ -175,7 +174,7 @@ const Analytics = () => {
   // --- GRAFİK VE QQQM BENCHMARK HESAPLAMASI ---
   const { chartData, benchmarkSummary } = useMemo(() => {
     const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
-    const rangeFromDate = new Date(Date.now() - range * 86400000).toISOString().split('T')[0]
+    const rangeFromDate = getTodayDate(new Date(Date.now() - range * 86400000))
     const effectiveFirstDate = firstTxDate || earliestActiveDate
     const effectiveCost = initialActiveCost > 0 ? initialActiveCost : currentActiveCost
 
@@ -187,7 +186,7 @@ const Analytics = () => {
 
     // GÜVENLİK AĞI & ANLIK GÜNCEL VERİ ENTEGRASYONU:
     let effectiveSnaps = [...snapshots]
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getTodayDate()
 
     // Eğer bugünün tarihi snapshot'larda yoksa, anlık varlık değerlerini son nokta olarak ekle
     if (assets.length > 0 && !effectiveSnaps.some(s => s.snapshot_date === todayStr)) {

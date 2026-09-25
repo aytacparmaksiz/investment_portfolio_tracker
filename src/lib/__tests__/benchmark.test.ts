@@ -208,15 +208,16 @@ console.log('--- TEST SUITE: Streamlined Natural Snapshots & Benchmark ---\n')
 
     const besDeduction = { value: 501376, cost: 263891 }
 
-    // 1A (30 days) series check
-    const range1M = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
+    // 1A (30 days) series check relative to snapshot dataset end date
+    const latestDate = deduped[deduped.length - 1].snapshot_date
+    const range1M = new Date(new Date(latestDate).getTime() - 30 * 86400000).toISOString().split('T')[0]
     const res1M = buildBenchmarkSeries(deduped, [], [], 304, 34.5, '2026-06-22', 784702, range1M, besDeduction)
     assert(res1M.points.length === 25, `1A returns 25 distinct daily fluctuating points (got ${res1M.points.length})`)
     assert(res1M.points[0].rawDate === '2026-08-25', `1A starts on 2026-08-25`)
     assert(res1M.points[res1M.points.length - 1].rawDate === '2026-09-24', `1A ends on 2026-09-24`)
 
     // 6A (180 days) series check
-    const range6M = new Date(Date.now() - 180 * 86400000).toISOString().split('T')[0]
+    const range6M = new Date(new Date(latestDate).getTime() - 180 * 86400000).toISOString().split('T')[0]
     const res6M = buildBenchmarkSeries(deduped, [], [], 304, 34.5, '2026-06-22', 784702, range6M, besDeduction)
     assert(res6M.points.length === 72, `6A returns full 72 daily points without flat lines (got ${res6M.points.length})`)
     assert(res6M.points[0].rawDate === '2026-06-22', `6A starts on 2026-06-22`)

@@ -1,5 +1,6 @@
-import { supabase } from './supabase'
-import { deduplicateSnapshots } from './benchmark'
+import { supabase } from './supabase.ts'
+import { deduplicateSnapshots } from './benchmark.ts'
+import { getTodayDate } from './constants.ts'
 
 export async function saveSnapshot(
   portfolioId: string,
@@ -10,7 +11,7 @@ export async function saveSnapshot(
 ) {
   if (!portfolioId) return
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayDate()
 
   const snapshotPayload = {
     portfolio_id: portfolioId,
