@@ -82,6 +82,14 @@ export function calculateAssetUnitPriceTRY(
     return Number(asset.avg_cost) || 1
   }
 
+  if (asset.type === 'usd_nakit') {
+    return usdRate
+  }
+
+  if (asset.type === 'eur_nakit') {
+    return livePrices['EURTRY=X'] || (usdRate * 1.08)
+  }
+
   if (asset.type === 'bes') {
     return Number(asset.principal ?? asset.avg_cost ?? 0)
   }

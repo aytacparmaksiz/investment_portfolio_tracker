@@ -51,6 +51,8 @@ const Assets = () => {
   const activePid = portfolioId || contextPortfolioId
   const cashAsset = assets.find((a: any) => a.portfolio_id === activePid && a.type === 'nakit')
   const availableCash = cashAsset ? Number(cashAsset.quantity || 0) : 0
+  const usdCashAsset = assets.find((a: any) => a.portfolio_id === activePid && a.type === 'usd_nakit')
+  const availableUsdCash = usdCashAsset ? Number(usdCashAsset.quantity || 0) : 0
   
   const { executeSearch: executeAddSearch, searchResults, setSearchResults, searching } = useAssetSearch()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -97,7 +99,7 @@ const Assets = () => {
   }
 
   const selectedType = ASSET_TYPES.find(t => t.value === form.type)
-  const isManual = ['bes', 'vadeli', 'nakit'].includes(form.type)
+  const isManual = ['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(form.type)
   const isVadeli = form.type === 'vadeli'
 
 
@@ -142,9 +144,9 @@ const Assets = () => {
         portfolio_id: targetPid,
         type: form.type,
         name: form.name,
-        symbol: form.symbol ? form.symbol.trim().toUpperCase() : null,
-        quantity: isManual ? 1 : Number(form.quantity),
-        avg_cost: form.avg_cost ? Number(form.avg_cost) : null,
+        symbol: form.symbol ? form.symbol.trim().toUpperCase() : (form.type === 'usd_nakit' ? 'USD' : form.type === 'eur_nakit' ? 'EUR' : null),
+        quantity: isManual ? Number(form.manual_value || 1) : Number(form.quantity),
+        avg_cost: form.type === 'usd_nakit' ? (prices['USDTRY=X'] || FALLBACK_USD_RATE) : form.type === 'eur_nakit' ? (prices['EURTRY=X'] || (FALLBACK_USD_RATE * 1.08)) : (form.avg_cost ? Number(form.avg_cost) : null),
         coingecko_id: form.coingecko_id ? form.coingecko_id.trim().toLowerCase() : null,
         strategy: form.type === 'usd_hisse' ? form.strategy : null,
         sector: (form.type === 'usd_hisse' || form.type === 'hisse') ? (form.sector || 'Diğer') : null
@@ -160,6 +162,14 @@ const Assets = () => {
       }
       if (form.type === 'nakit') {
         await supabase.from('assets').update({ quantity: Number(form.manual_value), avg_cost: 1, symbol: null }).eq('id', asset.id)
+      }
+      if (form.type === 'usd_nakit') {
+        const curUsd = prices['USDTRY=X'] || FALLBACK_USD_RATE
+        await supabase.from('assets').update({ quantity: Number(form.manual_value), avg_cost: curUsd, symbol: 'USD' }).eq('id', asset.id)
+      }
+      if (form.type === 'eur_nakit') {
+        const curEur = prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)
+        await supabase.from('assets').update({ quantity: Number(form.manual_value), avg_cost: curEur, symbol: 'EUR' }).eq('id', asset.id)
       }
       if (isVadeli && form.interest_rate && form.maturity_days) {
         const [y, m, d] = (form.start_date || getTodayDate()).split('-').map(Number)
@@ -197,14 +207,41 @@ const Assets = () => {
     if (!isManual && deductCashOnNewAsset && form.quantity && form.avg_cost) {
       const isUsdType = isUSD(form.type)
       const currentRate = prices['USDTRY=X'] || (form.manualRate ? Number(form.manualRate) : 34)
-      const costTRY = isUsdType ? Number(form.avg_cost) * Number(form.quantity) * currentRate : Number(form.avg_cost) * Number(form.quantity)
-      if (costTRY > 0) {
-        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
-        if (cashAsset) {
-          const currentQty = Number(cashAsset.quantity || 0)
-          const newQty = Math.round((currentQty - costTRY) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
-          newAssetCashNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+      let usdCash = null
+      if (isUsdType) {
+        const { data: dbUsdCash } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('portfolio_id', targetPid)
+          .eq('type', 'usd_nakit')
+          .maybeSingle()
+        usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'usd_nakit')
+      }
+
+      if (isUsdType && usdCash) {
+        const costUSD = Number(form.avg_cost) * Number(form.quantity)
+        if (costUSD > 0) {
+          const currentQty = Number(usdCash.quantity || 0)
+          const newQty = Math.round((currentQty - costUSD) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+          newAssetCashNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+        }
+      } else {
+        const costTRY = isUsdType ? Number(form.avg_cost) * Number(form.quantity) * currentRate : Number(form.avg_cost) * Number(form.quantity)
+        if (costTRY > 0) {
+          const { data: dbCash } = await supabase
+            .from('assets')
+            .select('*')
+            .eq('portfolio_id', targetPid)
+            .eq('type', 'nakit')
+            .maybeSingle()
+          const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty - costTRY) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+            newAssetCashNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+          }
         }
       }
     }
@@ -258,7 +295,7 @@ const Assets = () => {
     if (error) { setEditError(error.message); setEditSaving(false); return }
 
     // Senkronizasyon: update_asset_stats çağrıldığında kullanıcının el ile girdiği adet ve maliyet ezilmesin
-    if (!['bes', 'vadeli', 'nakit'].includes(editAsset.type)) {
+    if (!['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(editAsset.type)) {
       const usdRate = isUsdType ? (prices['USDTRY=X'] || FALLBACK_USD_RATE) : undefined
       await syncInitialTransaction(editAsset.id, newQty, newCost, isUsdType, usdRate)
     }
@@ -319,40 +356,94 @@ const Assets = () => {
     // Satış tutarını otomatik Nakit hesabına aktar
     let cashCreditedNotice = ''
     if (txType === 'sell' && creditCashOnSell) {
-      const proceedsTRY = tryTotal || (finalPrice * Number(txForm.quantity))
-      if (proceedsTRY > 0) {
-        const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
-        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
-        if (cashAsset) {
-          const currentQty = Number(cashAsset.quantity || 0)
-          const newQty = Math.round((currentQty + proceedsTRY) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
-        } else if (targetPid) {
-          await supabase.from('assets').insert({
-            portfolio_id: targetPid,
-            name: 'Nakit (TL)',
-            symbol: 'TL',
-            type: 'nakit',
-            quantity: Math.round(proceedsTRY * 100) / 100,
-            avg_cost: 1
-          })
+      const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+      let usdCash = null
+      if (usdType) {
+        const { data: dbUsdCash } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('portfolio_id', targetPid)
+          .eq('type', 'usd_nakit')
+          .maybeSingle()
+        usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'usd_nakit')
+      }
+
+      if (usdType && usdCash) {
+        const proceedsUSD = finalPrice * Number(txForm.quantity)
+        if (proceedsUSD > 0) {
+          const currentQty = Number(usdCash.quantity || 0)
+          const newQty = Math.round((currentQty + proceedsUSD) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+          cashCreditedNotice = ` ($${proceedsUSD.toFixed(2)} USD nakite aktarıldı)`
         }
-        cashCreditedNotice = ` (₺${Math.round(proceedsTRY).toLocaleString('tr-TR')} nakite aktarıldı)`
+      } else {
+        const proceedsTRY = tryTotal || (finalPrice * Number(txForm.quantity))
+        if (proceedsTRY > 0) {
+          const { data: dbCash } = await supabase
+            .from('assets')
+            .select('*')
+            .eq('portfolio_id', targetPid)
+            .eq('type', 'nakit')
+            .maybeSingle()
+          const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty + proceedsTRY) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Nakit (TL)',
+              symbol: 'TL',
+              type: 'nakit',
+              quantity: Math.round(proceedsTRY * 100) / 100,
+              avg_cost: 1
+            })
+          }
+          cashCreditedNotice = ` (₺${Math.round(proceedsTRY).toLocaleString('tr-TR')} nakite aktarıldı)`
+        }
       }
     }
 
     // Alım yapıldığında tutarı Nakit hesabından düş
     let cashDeductedNotice = ''
     if (txType === 'buy' && deductCashOnBuy) {
-      const costTRY = tryTotal || (finalPrice * Number(txForm.quantity))
-      if (costTRY > 0) {
-        const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
-        const cashAsset = assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
-        if (cashAsset) {
-          const currentQty = Number(cashAsset.quantity || 0)
-          const newQty = Math.round((currentQty - costTRY) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
-          cashDeductedNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+      const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+      let usdCash = null
+      if (usdType) {
+        const { data: dbUsdCash } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('portfolio_id', targetPid)
+          .eq('type', 'usd_nakit')
+          .maybeSingle()
+        usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'usd_nakit')
+      }
+
+      if (usdType && usdCash) {
+        const costUSD = finalPrice * Number(txForm.quantity)
+        if (costUSD > 0) {
+          const currentQty = Number(usdCash.quantity || 0)
+          const newQty = Math.round((currentQty - costUSD) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+          cashDeductedNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+        }
+      } else {
+        const costTRY = tryTotal || (finalPrice * Number(txForm.quantity))
+        if (costTRY > 0) {
+          const { data: dbCash } = await supabase
+            .from('assets')
+            .select('*')
+            .eq('portfolio_id', targetPid)
+            .eq('type', 'nakit')
+            .maybeSingle()
+          const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty - costTRY) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+            cashDeductedNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+          }
         }
       }
     }
@@ -397,67 +488,73 @@ const Assets = () => {
     // 3. Nakit iadesi / düşümü (Cash Reversal)
     let cashNotice = ''
     const isUsdType = isUSD(txAsset.type)
-    const usdRate = Number(prices['USDTRY=X']) || FALLBACK_USD_RATE || 1
-    const effectiveRate = isUsdType ? (Number(txToDelete.try_rate) || usdRate) : 1
-    const rawTryTotal = txToDelete.try_total != null ? Number(txToDelete.try_total) : 0
-    const tryAmount = (isUsdType && rawTryTotal > 0)
-      ? rawTryTotal
-      : (Number(txToDelete.quantity || 0) * Number(txToDelete.price || 0) * effectiveRate)
-
-    if (tryAmount > 0) {
-      const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
-      if (targetPid) {
-        // En güncel nakit varlığını doğrudan Supabase'den çek
-        const { data: dbCash } = await supabase
+    const targetPid = txAsset.portfolio_id || portfolioId || contextPortfolioId
+    if (targetPid) {
+      let usdCashAsset: any = null
+      if (isUsdType) {
+        const { data: dbUsdCash } = await supabase
           .from('assets')
           .select('*')
           .eq('portfolio_id', targetPid)
-          .eq('type', 'nakit')
+          .eq('type', 'usd_nakit')
           .maybeSingle()
+        usdCashAsset = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'usd_nakit')
+      }
 
-        const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
-
-        if (txToDelete.type === 'buy') {
-          // Alım işlemi nakit düşmüştü, silinince nakite iade edilir (kredi)
-          if (cashAsset) {
-            const currentQty = Number(cashAsset.quantity || 0)
-            const newQty = Math.round((currentQty + tryAmount) * 100) / 100
-            const { error: updErr } = await supabase
-              .from('assets')
-              .update({ quantity: newQty, avg_cost: 1 })
-              .eq('id', cashAsset.id)
-            if (updErr) {
-              console.error('Nakit güncelleme hatası:', updErr)
-            } else {
-              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
-            }
-          } else {
-            const { error: insErr } = await supabase.from('assets').insert({
-              portfolio_id: targetPid,
-              name: 'Nakit (TL)',
-              symbol: 'TL',
-              type: 'nakit',
-              quantity: Math.round(tryAmount * 100) / 100,
-              avg_cost: 1
-            })
-            if (insErr) {
-              console.error('Nakit oluşturma hatası:', insErr)
-            } else {
-              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
-            }
+      if (isUsdType && usdCashAsset) {
+        const usdAmount = Number(txToDelete.quantity || 0) * Number(txToDelete.price || 0)
+        if (usdAmount > 0) {
+          const currentQty = Number(usdCashAsset.quantity || 0)
+          if (txToDelete.type === 'buy') {
+            const newQty = Math.round((currentQty + usdAmount) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCashAsset.id)
+            cashNotice = ` ($${usdAmount.toFixed(2)} USD nakite iade edildi)`
+          } else if (txToDelete.type === 'sell') {
+            const newQty = Math.round((currentQty - usdAmount) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCashAsset.id)
+            cashNotice = ` ($${usdAmount.toFixed(2)} USD nakitten düşüldü)`
           }
-        } else if (txToDelete.type === 'sell') {
-          // Satış işlemi nakit eklemişti, silinince nakitten düşülür (borç)
-          if (cashAsset) {
-            const currentQty = Number(cashAsset.quantity || 0)
-            const newQty = Math.round((currentQty - tryAmount) * 100) / 100
-            const { error: updErr } = await supabase
-              .from('assets')
-              .update({ quantity: newQty, avg_cost: 1 })
-              .eq('id', cashAsset.id)
-            if (updErr) {
-              console.error('Nakit düşme hatası:', updErr)
+        }
+      } else {
+        const usdRate = Number(prices['USDTRY=X']) || FALLBACK_USD_RATE || 1
+        const effectiveRate = isUsdType ? (Number(txToDelete.try_rate) || usdRate) : 1
+        const rawTryTotal = txToDelete.try_total != null ? Number(txToDelete.try_total) : 0
+        const tryAmount = (isUsdType && rawTryTotal > 0)
+          ? rawTryTotal
+          : (Number(txToDelete.quantity || 0) * Number(txToDelete.price || 0) * effectiveRate)
+
+        if (tryAmount > 0) {
+          const { data: dbCash } = await supabase
+            .from('assets')
+            .select('*')
+            .eq('portfolio_id', targetPid)
+            .eq('type', 'nakit')
+            .maybeSingle()
+
+          const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+
+          if (txToDelete.type === 'buy') {
+            if (cashAsset) {
+              const currentQty = Number(cashAsset.quantity || 0)
+              const newQty = Math.round((currentQty + tryAmount) * 100) / 100
+              await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
             } else {
+              await supabase.from('assets').insert({
+                portfolio_id: targetPid,
+                name: 'Nakit (TL)',
+                symbol: 'TL',
+                type: 'nakit',
+                quantity: Math.round(tryAmount * 100) / 100,
+                avg_cost: 1
+              })
+              cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakite iade edildi)`
+            }
+          } else if (txToDelete.type === 'sell') {
+            if (cashAsset) {
+              const currentQty = Number(cashAsset.quantity || 0)
+              const newQty = Math.round((currentQty - tryAmount) * 100) / 100
+              await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
               cashNotice = ` (₺${Math.round(tryAmount).toLocaleString('tr-TR')} nakitten düşüldü)`
             }
           }
@@ -480,7 +577,8 @@ const Assets = () => {
 
   const openManualUpdateModal = (asset: any) => {
     const lastManualValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
-    const currentValue = asset.type === 'nakit' ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1) : Number(lastManualValue || asset.principal || 0)
+    const isCashAsset = ['nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)
+    const currentValue = isCashAsset ? Number(asset.quantity || 0) : Number(lastManualValue || asset.principal || 0)
     setManualAsset(asset)
     setManualError('')
     setManualForm({
@@ -502,6 +600,18 @@ const Assets = () => {
   
     if (manualAsset.type === 'nakit') {
       const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: 1, symbol: null }).eq('id', manualAsset.id)
+      if (error) { setManualError(error.message); setManualSaving(false); return }
+    }
+
+    if (manualAsset.type === 'usd_nakit') {
+      const curUsd = manualAsset.avg_cost || prices['USDTRY=X'] || FALLBACK_USD_RATE
+      const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: curUsd, symbol: 'USD' }).eq('id', manualAsset.id)
+      if (error) { setManualError(error.message); setManualSaving(false); return }
+    }
+
+    if (manualAsset.type === 'eur_nakit') {
+      const curEur = manualAsset.avg_cost || prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)
+      const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: curEur, symbol: 'EUR' }).eq('id', manualAsset.id)
       if (error) { setManualError(error.message); setManualSaving(false); return }
     }
   
@@ -536,6 +646,9 @@ const Assets = () => {
 
   const formatCurrency = (val: number, type?: string) => {
     if (isHidden) return '••••••'
+    if (type === 'eur_nakit') {
+      return `€${Number(val).toLocaleString('de-DE', { maximumFractionDigits: 2 })}`
+    }
     return type && isUSD(type)
       ? `$${Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
       : `₺${Number(val).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
@@ -553,7 +666,7 @@ const Assets = () => {
   const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }
   
   const visibleAssets = assets.filter((asset: any) => {
-    if (['bes', 'vadeli', 'nakit'].includes(asset.type)) return true
+    if (['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)) return true
     return Number(asset.quantity || 0) > 0
   })
 
@@ -718,11 +831,13 @@ const Assets = () => {
                     style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                   />
                   <label htmlFor="deductCashBuy" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
-                    💰 Alım tutarını <strong>Nakit</strong> hesabımdan düş
+                    💰 Alım tutarını <strong>{isUSD(txAsset.type) && usdCashAsset ? 'USD Nakit ($)' : 'Nakit'}</strong> hesabımdan düş
                   </label>
                 </div>
-                <span style={{ fontSize: '11px', color: availableCash > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                  Nakit: ₺{Math.round(availableCash).toLocaleString('tr-TR')}
+                <span style={{ fontSize: '11px', color: (isUSD(txAsset.type) && usdCashAsset ? availableUsdCash > 0 : availableCash > 0) ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                  {isUSD(txAsset.type) && usdCashAsset
+                    ? `USD Nakit: $${availableUsdCash.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                    : `Nakit: ₺${Math.round(availableCash).toLocaleString('tr-TR')}`}
                 </span>
               </div>
             )}
@@ -745,7 +860,7 @@ const Assets = () => {
                   style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                 />
                 <label htmlFor="creditCash" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
-                  💰 Satış tutarını otomatik <strong>Nakit</strong> hesabına aktar
+                  💰 Satış tutarını otomatik <strong>{isUSD(txAsset.type) && usdCashAsset ? 'USD Nakit ($)' : 'Nakit'}</strong> hesabına aktar
                 </label>
               </div>
             )}
@@ -834,8 +949,20 @@ const Assets = () => {
             )}
             {manualAsset.type === 'nakit' && (
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>TRY Nakit Tutarı</label>
+                <label style={labelStyle}>TRY Nakit Tutarı (₺)</label>
                 <input type="number" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="50000" style={inputStyle} />
+              </div>
+            )}
+            {manualAsset.type === 'usd_nakit' && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>USD Nakit Tutarı ($)</label>
+                <input type="number" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
+              </div>
+            )}
+            {manualAsset.type === 'eur_nakit' && (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
+                <input type="number" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             )}
             {manualError && (
@@ -875,7 +1002,13 @@ const Assets = () => {
             <label style={labelStyle}>Varlık Türü</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {ASSET_TYPES.map(t => (
-                <button key={t.value} onClick={() => setForm({ ...form, type: t.value })}
+                <button key={t.value} onClick={() => setForm({
+                  ...form,
+                  type: t.value,
+                  name: (!form.name || form.name === 'Nakit (TL)' || form.name === 'USD Nakit' || form.name === 'EUR Nakit')
+                    ? (t.value === 'usd_nakit' ? 'USD Nakit' : t.value === 'eur_nakit' ? 'EUR Nakit' : t.value === 'nakit' ? 'Nakit (TL)' : form.name)
+                    : form.name
+                })}
                   style={{ padding: '7px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600',
                     background: form.type === t.value ? 'var(--accent)' : 'var(--bg-elevated)',
                     border: `1px solid ${form.type === t.value ? 'var(--accent)' : 'var(--border)'}`,
@@ -916,19 +1049,28 @@ const Assets = () => {
                 <div><label style={labelStyle}>Yatırılan Tutar (₺)</label><input type="number" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="150000" style={inputStyle} /></div>
                 <div><label style={labelStyle}>Güncel Değer (₺)</label><input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="350000" style={inputStyle} /></div>
               </div>
-            ) : (
+            ) : form.type === 'usd_nakit' ? (
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>Anapara (₺)</label>
-                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
+                <label style={labelStyle}>USD Nakit Tutarı ($)</label>
+                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
-            )}
-            {isVadeli && (
+            ) : form.type === 'eur_nakit' ? (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
+                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
+              </div>
+            ) : isVadeli ? (
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div><label style={labelStyle}>Yıllık Faiz (%)</label><input type="number" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} placeholder="40" style={inputStyle} /></div>
                   <div><label style={labelStyle}>Vade (Gün)</label><input type="number" value={form.maturity_days} onChange={e => setForm({ ...form, maturity_days: e.target.value })} placeholder="30" style={inputStyle} /></div>
                 </div>
                 <div style={{ marginBottom: '12px' }}><label style={labelStyle}>Başlangıç Tarihi</label><input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} style={inputStyle} /></div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>Anapara (₺)</label>
+                <input type="number" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="100000" style={inputStyle} />
               </div>
             )}
             </div>
@@ -1004,11 +1146,13 @@ const Assets = () => {
                   style={{ width: '18px', height: '18px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                 />
                 <label htmlFor="deductCashNewAsset" style={{ fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600' }}>
-                  💰 Alım tutarını <strong>Nakit</strong> hesabımdan düş
+                  💰 Alım tutarını <strong>{isUSD(form.type) && usdCashAsset ? 'USD Nakit ($)' : 'Nakit'}</strong> hesabımdan düş
                 </label>
               </div>
-              <span style={{ fontSize: '11px', color: availableCash > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                Nakit: ₺{Math.round(availableCash).toLocaleString('tr-TR')}
+              <span style={{ fontSize: '11px', color: (isUSD(form.type) && usdCashAsset ? availableUsdCash > 0 : availableCash > 0) ? 'var(--green)' : 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                {isUSD(form.type) && usdCashAsset
+                  ? `USD Nakit: $${availableUsdCash.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                  : `Nakit: ₺${Math.round(availableCash).toLocaleString('tr-TR')}`}
               </span>
             </div>
           )}
@@ -1025,7 +1169,18 @@ const Assets = () => {
         {visibleAssets.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0' }}><p style={{ fontSize: '32px', marginBottom: '8px' }}>📭</p><p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Henüz varlık eklenmedi</p></div>
         ) : (() => {
-          const TYPE_COLORS: Record<string, string> = { hisse: '#3487AB', usd_hisse: '#707272', kripto: '#8b5cf6', etf: '#B32132', doviz: '#33622C', altin: '#ECC703', vadeli: '#0891b2' }
+          const TYPE_COLORS: Record<string, string> = {
+            hisse: '#3487AB',
+            usd_hisse: '#707272',
+            kripto: '#8b5cf6',
+            etf: '#B32132',
+            doviz: '#33622C',
+            altin: '#ECC703',
+            vadeli: '#0891b2',
+            nakit: '#64748b',
+            usd_nakit: '#16a34a',
+            eur_nakit: '#2563eb'
+          }
           const groups: Record<string, any[]> = {}
           visibleAssets.forEach(a => { if (!groups[a.type]) groups[a.type] = []; groups[a.type].push(a) })
           
@@ -1046,10 +1201,10 @@ const Assets = () => {
                 </div>
 
                 {isExpanded && items.map((asset: any, index: number) => {
-                  const isManualAsset = ['bes', 'vadeli', 'nakit'].includes(asset.type)
+                  const isManualAsset = ['bes', 'vadeli', 'nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)
                   const lastValue = asset.manual_values?.[asset.manual_values.length - 1]?.value
-                  const manualDisplayValue = asset.type === 'nakit'
-                      ? Number(asset.quantity || 0) * Number(asset.avg_cost || 1)
+                  const manualDisplayValue = ['nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)
+                      ? Number(asset.quantity || 0)
                       : Number(lastValue || asset.principal || 0)
 
                   return (
@@ -1065,7 +1220,7 @@ const Assets = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isManualAsset && manualDisplayValue > 0 && (
                           <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
-                            {isHidden ? '••••••' : `₺${Number(manualDisplayValue).toLocaleString('tr-TR')}`}
+                            {isHidden ? '••••••' : formatCurrency(manualDisplayValue, asset.type)}
                           </p>
                         )}
                         {isManualAsset && (

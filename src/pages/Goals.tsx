@@ -27,6 +27,18 @@ const Goals = () => {
   const [showManageSavings, setShowManageSavings] = useState(false)
   const [savingType, setSavingType] = useState<'giris' | 'cekim'>('giris')
   const [showReturnDetails, setShowReturnDetails] = useState(false)
+
+  // Borçlar & Yükümlülükler State
+  const [liabilities, setLiabilities] = useState<any[]>([])
+  const [showLiabilityList, setShowLiabilityList] = useState(false)
+  const [showLiabilityForm, setShowLiabilityForm] = useState(false)
+  const [liabilityForm, setLiabilityForm] = useState({
+    name: '',
+    amount: '',
+    currency: 'TRY',
+    monthly_payment: '',
+    interest_rate: ''
+  })
   
   const [assetForm, setAssetForm] = useState({ name: '', value_try: '', category: 'ev' })
   const [savingForm, setSavingForm] = useState({ month: getTodayDate().slice(0, 7), amount_try: '', income_try: '', note: '' })
@@ -75,18 +87,49 @@ const Goals = () => {
       .from('savings').select('*').eq('portfolio_id', portfolioId).order('month', { ascending: true })
     setSavings(sv || [])
 
+    // Borçlar ve Yükümlülükler (Liabilities) çekme - resilient local storage fallback
+    try {
+      const { data: lb, error: lbErr } = await supabase
+        .from('liabilities').select('*').eq('portfolio_id', portfolioId).order('created_at', { ascending: false })
+      if (!lbErr && lb) {
+        setLiabilities(lb)
+        if (portfolioId) localStorage.setItem(`user_liabilities_${portfolioId}`, JSON.stringify(lb))
+        localStorage.setItem('user_liabilities', JSON.stringify(lb))
+      } else {
+        const local = (portfolioId && localStorage.getItem(`user_liabilities_${portfolioId}`)) || localStorage.getItem('user_liabilities')
+        if (local) setLiabilities(JSON.parse(local))
+        else setLiabilities([])
+      }
+    } catch {
+      const local = (portfolioId && localStorage.getItem(`user_liabilities_${portfolioId}`)) || localStorage.getItem('user_liabilities')
+      if (local) setLiabilities(JSON.parse(local))
+      else setLiabilities([])
+    }
+
     setLoading(false)
   }
 
   const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
   const goalTRY = GOAL_USD * usdRate
 
+  // Gerçek Net Varlık (True Net Worth) = (Portföy Varlıkları + Fiziksel Varlıklar) - Toplam Borçlar
   const portfolioTotal = assets.reduce((sum, a) => sum + getCurrentValue(a, prices, usdRate), 0)
   const manualTotal = manualAssets.reduce((sum, a) => sum + Number(a.value_try), 0)
-  const grandTotal = portfolioTotal + manualTotal
-  const progressPct = Math.min((grandTotal / goalTRY) * 100, 100)
+  const totalAssetsTRY = portfolioTotal + manualTotal
+  const totalLiabilitiesTRY = liabilities.reduce((sum, l) => {
+    const amt = Number(l.amount || 0)
+    return sum + (l.currency === 'USD' ? amt * usdRate : amt)
+  }, 0)
+  const netWorthTRY = totalAssetsTRY - totalLiabilitiesTRY
+  const netWorthUSD = netWorthTRY / usdRate
+  const totalAssetsUSD = totalAssetsTRY / usdRate
+  const totalLiabilitiesUSD = totalLiabilitiesTRY / usdRate
 
-  const currentNW_USD = grandTotal / usdRate
+  // Hedef ve Milestone'lar Gerçek Net Varlık bazlıdır
+  const effectiveNW_TRY = Math.max(0, netWorthTRY)
+  const progressPct = Math.min((effectiveNW_TRY / goalTRY) * 100, 100)
+
+  const currentNW_USD = Math.max(0, netWorthUSD)
   const nextMilestoneUSD = MILESTONES.find(m => m > currentNW_USD) || MILESTONES[MILESTONES.length - 1]
   const prevMilestoneUSD = MILESTONES.slice().reverse().find(m => m <= currentNW_USD) || 0
   const milestoneRange = nextMilestoneUSD - prevMilestoneUSD
@@ -243,31 +286,32 @@ const Goals = () => {
       return months >= maxMonths ? null : months
     }
 
-    const monthsToFireDinamik = simulateMonthsToTarget(fireTargetUSD, avgMonthlySaving_usd, aylikGetiri, currentPortfUSD)
-    const monthsToFireSabit = simulateMonthsToTarget(fireTargetUSD, avgMonthlySaving_usd, sabitAylikGetiri, currentPortfUSD)
-
     const simulateMonthsToMilestone = (targetUSD: number, contributionUsd: number, rate: number) => {
       let liquid = currentPortfUSD
       let manual = manualTotal / usdRate
+      let debt = totalLiabilitiesUSD
       let months = 0
       const maxMonths = 600
-      while (liquid + manual < targetUSD && months < maxMonths) {
+      while ((liquid + manual - debt) < targetUSD && months < maxMonths) {
         liquid = liquid * (1 + rate) + contributionUsd
         months++
       }
       return months >= maxMonths ? null : months
     }
 
+    const monthsToFireDinamik = simulateMonthsToMilestone(fireTargetUSD, avgMonthlySaving_usd, aylikGetiri)
+    const monthsToFireSabit = simulateMonthsToMilestone(fireTargetUSD, avgMonthlySaving_usd, sabitAylikGetiri)
+
     const monthsToMilestoneDinamik = simulateMonthsToMilestone(nextMilestoneUSD, avgMonthlySaving_usd, aylikGetiri)
     const monthsToMilestoneSabit = simulateMonthsToMilestone(nextMilestoneUSD, avgMonthlySaving_usd, sabitAylikGetiri)
 
     const liquidMilestoneEtas = MILESTONES.map(m => {
-      const isReached = currentPortfUSD >= m
+      const isReached = netWorthUSD >= m
       return {
         target: m,
         reached: isReached,
-        monthsDinamik: isReached ? 0 : simulateMonthsToTarget(m, avgMonthlySaving_usd, aylikGetiri, currentPortfUSD),
-        monthsSabit: isReached ? 0 : simulateMonthsToTarget(m, avgMonthlySaving_usd, sabitAylikGetiri, currentPortfUSD)
+        monthsDinamik: isReached ? 0 : simulateMonthsToMilestone(m, avgMonthlySaving_usd, aylikGetiri),
+        monthsSabit: isReached ? 0 : simulateMonthsToMilestone(m, avgMonthlySaving_usd, sabitAylikGetiri)
       }
     })
 
@@ -276,11 +320,12 @@ const Goals = () => {
       if (targetYears <= 0) return null
       const n = targetYears * 12
       const growthFactor = Math.pow(1 + rate, n)
+      const currentEffectiveUSD = Math.max(0, netWorthUSD)
       let requiredUsd: number
       if (rate !== 0) {
-        requiredUsd = (fireTargetUSD - currentPortfUSD * growthFactor) / ((growthFactor - 1) / rate)
+        requiredUsd = (fireTargetUSD - currentEffectiveUSD * growthFactor) / ((growthFactor - 1) / rate)
       } else {
-        requiredUsd = (fireTargetUSD - currentPortfUSD) / n
+        requiredUsd = (fireTargetUSD - currentEffectiveUSD) / n
       }
       return requiredUsd * usdRate
     }
@@ -309,7 +354,7 @@ const Goals = () => {
       activeCostUSD,
       activeValueUSD
     }
-  }, [assets, manualTotal, savings, historicalRates, usdRate, monthlyExpenseUSD, targetYearsInput, nextMilestoneUSD, prices])
+  }, [assets, manualTotal, totalLiabilitiesUSD, savings, historicalRates, usdRate, monthlyExpenseUSD, targetYearsInput, nextMilestoneUSD, prices])
 
   const handleAddManualAsset = async () => {
     if (!assetForm.name || !assetForm.value_try) return
@@ -328,6 +373,53 @@ const Goals = () => {
     if (!confirm('Silmek istediğine emin misin?')) return
     await supabase.from('manual_assets').delete().eq('id', id)
     fetchData()
+  }
+
+  const handleAddLiability = async () => {
+    if (!liabilityForm.name || !liabilityForm.amount) return
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'lb_' + Date.now()
+    const newLiability = {
+      id,
+      portfolio_id: portfolioId,
+      name: liabilityForm.name.trim(),
+      amount: Number(liabilityForm.amount),
+      currency: liabilityForm.currency || 'TRY',
+      monthly_payment: liabilityForm.monthly_payment ? Number(liabilityForm.monthly_payment) : null,
+      interest_rate: liabilityForm.interest_rate ? Number(liabilityForm.interest_rate) : null,
+      created_at: new Date().toISOString()
+    }
+
+    const updated = [newLiability, ...liabilities]
+    setLiabilities(updated)
+    if (portfolioId) {
+      localStorage.setItem(`user_liabilities_${portfolioId}`, JSON.stringify(updated))
+    }
+    localStorage.setItem('user_liabilities', JSON.stringify(updated))
+
+    try {
+      await supabase.from('liabilities').insert(newLiability)
+    } catch {
+      // offline/table fallback
+    }
+
+    setLiabilityForm({ name: '', amount: '', currency: 'TRY', monthly_payment: '', interest_rate: '' })
+    setShowLiabilityForm(false)
+  }
+
+  const handleDeleteLiability = async (id: string) => {
+    if (!confirm('Bu borç / kredi kaydını silmek istediğinize emin misiniz?')) return
+    const updated = liabilities.filter(l => l.id !== id)
+    setLiabilities(updated)
+    if (portfolioId) {
+      localStorage.setItem(`user_liabilities_${portfolioId}`, JSON.stringify(updated))
+    }
+    localStorage.setItem('user_liabilities', JSON.stringify(updated))
+
+    try {
+      await supabase.from('liabilities').delete().eq('id', id)
+    } catch {
+      // offline/table fallback
+    }
   }
 
   const handleAddSaving = async () => {
@@ -444,10 +536,58 @@ const Goals = () => {
       ========================================= */}
       {activeTab === 'hedefler' && (
         <>
+          {/* Gerçek Net Varlık Özet Kartı */}
+          <div style={{ ...card, marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Gerçek Net Varlık (Net Worth)</p>
+                <h2 style={{ fontSize: '24px', fontWeight: '900', color: netWorthTRY >= 0 ? '#10b981' : 'var(--red)', letterSpacing: '-0.5px', marginTop: '2px' }}>
+                  {fc(netWorthTRY)}
+                </h2>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontWeight: '600' }}>
+                  {fcUSD(netWorthUSD)}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  background: netWorthTRY >= 0 ? 'var(--green-dim)' : 'var(--red-dim)',
+                  color: netWorthTRY >= 0 ? 'var(--green)' : 'var(--red)'
+                }}>
+                  {netWorthTRY >= 0 ? 'Net Pozitif' : 'Net Borçlu'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
+                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Toplam Varlıklar</p>
+                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(totalAssetsTRY)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{fcUSD(totalAssetsUSD)}</p>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
+                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Toplam Borçlar</p>
+                <p style={{ fontSize: '13px', fontWeight: '800', color: totalLiabilitiesTRY > 0 ? 'var(--red)' : 'var(--text-primary)' }}>
+                  {totalLiabilitiesTRY > 0 ? `-${fc(totalLiabilitiesTRY)}` : '₺0'}
+                </p>
+                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{fcUSD(totalLiabilitiesUSD)}</p>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center', border: '1px solid var(--accent)' }}>
+                <p style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Net Varlık</p>
+                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent)' }}>{fc(netWorthTRY)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--accent)' }}>{fcUSD(netWorthUSD)}</p>
+              </div>
+            </div>
+          </div>
+
           {/* Ana Hedef Tüpü */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
-              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Toplam Varlık</p>
+              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>$1M Hedef İlerlemesi (Net Varlık)</p>
               <p style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</p>
             </div>
 
@@ -468,19 +608,19 @@ const Goals = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Şu An</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(grandTotal)}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(grandTotal / usdRate)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Net Varlık</p>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(netWorthTRY)}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(netWorthUSD)}</p>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Kalan</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(Math.max(goalTRY - grandTotal, 0))}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(Math.max((goalTRY - grandTotal) / usdRate, 0))}</p>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(Math.max(goalTRY - netWorthTRY, 0))}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(Math.max((goalTRY - netWorthTRY) / usdRate, 0))}</p>
               </div>
             </div>
           </div>
 
-          {/* Ara Hedef (Milestone) Kartı - Tüm Varlıklar Bazlı */}
+          {/* Ara Hedef (Milestone) Kartı - Gerçek Net Varlık Bazlı */}
           <div style={{ ...card, marginBottom: '16px', border: '1px solid var(--accent)', background: 'linear-gradient(to right bottom, #ffffff, var(--bg-elevated))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <div>
@@ -526,7 +666,7 @@ const Goals = () => {
           {/* Dağılım Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowDistribution(!showDistribution)}>
-              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Varlık Dağılımı Özeti</p>
+              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Varlık & Yükümlülük Dağılımı</p>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showDistribution ? '▲ Gizle' : '▼ Göster'}</span>
             </div>
 
@@ -536,9 +676,17 @@ const Goals = () => {
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📊 Yatırım Portföyü </span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(portfolioTotal)}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>🏠 Duran Varlıklar </span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{fc(manualTotal)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--red)' }}>💳 Toplam Borçlar & Krediler </span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--red)' }}>-{fc(totalLiabilitiesTRY)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent)' }}>💎 Gerçek Net Varlık </span>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent)' }}>{fc(netWorthTRY)}</span>
                 </div>
               </div>
             )}
@@ -563,7 +711,7 @@ const Goals = () => {
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Ad</label>
-                  <input value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="örn. Ev" style={inputStyle} />
+                  <input value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="örn. Ev, Arsa, Araba" style={inputStyle} />
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={labelStyle}>Değer (₺)</label>
@@ -592,6 +740,102 @@ const Goals = () => {
                     </div>
                   </div>
                 ))
+              )
+            )}
+          </div>
+
+          {/* Borçlar & Yükümlülükler (Liabilities) Kartı */}
+          <div style={{ ...card, marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowLiabilityList(!showLiabilityList)}>
+                <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💳 Borçlar & Yükümlülükler</p>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showLiabilityList ? '▲ Gizle' : '▼ Göster'}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: totalLiabilitiesTRY > 0 ? 'var(--red)' : 'var(--text-secondary)' }}>
+                  {totalLiabilitiesTRY > 0 ? `-${fc(totalLiabilitiesTRY)}` : '₺0'}
+                </span>
+                {showLiabilityList && (
+                  <button onClick={() => setShowLiabilityForm(!showLiabilityForm)}
+                    style={{ padding: '6px 12px', background: showLiabilityForm ? 'var(--bg-elevated)' : 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700' }}>
+                    {showLiabilityForm ? 'Kapat' : '+ Ekle'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showLiabilityList && showLiabilityForm && (
+              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={labelStyle}>Borç / Kredi Adı</label>
+                  <input value={liabilityForm.name} onChange={e => setLiabilityForm({ ...liabilityForm, name: e.target.value })} placeholder="örn. Konut Kredisi, Taşıt Kredisi, Kredi Kartı" style={inputStyle} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <label style={labelStyle}>Kalan Tutar</label>
+                    <input type="number" value={liabilityForm.amount} onChange={e => setLiabilityForm({ ...liabilityForm, amount: e.target.value })} placeholder="450000" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Para Birimi</label>
+                    <select value={liabilityForm.currency} onChange={e => setLiabilityForm({ ...liabilityForm, currency: e.target.value })} style={inputStyle}>
+                      <option value="TRY">TRY (₺)</option>
+                      <option value="USD">USD ($)</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <label style={labelStyle}>Aylık Taksit (opsiyonel)</label>
+                    <input type="number" value={liabilityForm.monthly_payment} onChange={e => setLiabilityForm({ ...liabilityForm, monthly_payment: e.target.value })} placeholder="15000" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Faiz Oranı (%) (opsiyonel)</label>
+                    <input type="number" value={liabilityForm.interest_rate} onChange={e => setLiabilityForm({ ...liabilityForm, interest_rate: e.target.value })} placeholder="3.5" style={inputStyle} />
+                  </div>
+                </div>
+                <button onClick={handleAddLiability}
+                  style={{ width: '100%', padding: '10px', background: 'var(--accent)', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '14px' }}>
+                  Kaydet
+                </button>
+              </div>
+            )}
+
+            {showLiabilityList && (
+              liabilities.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>Henüz borç veya kredi kaydı eklenmedi</p>
+              ) : (
+                liabilities.map((l: any, i: number) => {
+                  const isUsd = l.currency === 'USD'
+                  const tryVal = isUsd ? Number(l.amount) * usdRate : Number(l.amount)
+                  return (
+                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < liabilities.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                      <div>
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{l.name}</span>
+                        {(l.monthly_payment || l.interest_rate) && (
+                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {l.monthly_payment ? `Taksit: ${isUsd ? '$' : '₺'}${Number(l.monthly_payment).toLocaleString('tr-TR')}` : ''}
+                            {l.monthly_payment && l.interest_rate ? ' · ' : ''}
+                            {l.interest_rate ? `Faiz: %${l.interest_rate}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--red)' }}>
+                            -{isUsd ? fcUSD(l.amount) : fc(l.amount)}
+                          </span>
+                          {isUsd && (
+                            <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>≈ {fc(tryVal)}</p>
+                          )}
+                        </div>
+                        <button onClick={() => handleDeleteLiability(l.id)}
+                          style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '6px', color: 'var(--red)', padding: '4px 8px', fontSize: '11px', fontWeight: '700' }}>
+                          Sil
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
               )
             )}
           </div>
@@ -901,10 +1145,10 @@ const Goals = () => {
             )}
           </div>
 
-          {/* Yatırım Portföyü Yol Haritası Kartı */}
+          {/* Net Varlık Yol Haritası Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>📈 Yatırım Portföyü Yol Haritası</p>
+              <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>📈 Net Varlık Yol Haritası</p>
             </div>
             
             {!fireData ? (
@@ -916,8 +1160,8 @@ const Goals = () => {
                   const isNext = !m.reached && (index === 0 || fireData.liquidMilestoneEtas[index - 1].reached);
                   
                   const milestoneRange = m.target - (index === 0 ? 0 : MILESTONES[index - 1]);
-                  const currentLiquidUSD = portfolioTotal / usdRate;
-                  const currentProgressInMilestone = currentLiquidUSD - (index === 0 ? 0 : MILESTONES[index - 1]);
+                  const currentNW = Math.max(0, netWorthUSD);
+                  const currentProgressInMilestone = currentNW - (index === 0 ? 0 : MILESTONES[index - 1]);
                   const progressPct = Math.max(0, Math.min((currentProgressInMilestone / milestoneRange) * 100, 100));
 
                   return (
@@ -949,7 +1193,7 @@ const Goals = () => {
                         {isNext && (
                           <div style={{ marginTop: '10px', marginBottom: '8px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Şu an: {fcUSD(Math.floor(currentLiquidUSD))}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>Şu an: {fcUSD(Math.floor(currentNW))}</span>
                               <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '700' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</span>
                             </div>
                             <div style={{ position: 'relative', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>

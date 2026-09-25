@@ -9,11 +9,15 @@ export const ASSET_TYPES = [
   { value: 'bes', label: '🏦 BES', hasSymbol: false, currency: 'TRY' },
   { value: 'vadeli', label: '💰 Vadeli Mevduat', hasSymbol: false, currency: 'TRY' },
   { value: 'nakit', label: '💵 TRY Nakit', hasSymbol: false, currency: 'TRY' },
+  { value: 'usd_nakit', label: '💵 USD Nakit', hasSymbol: false, currency: 'USD' },
+  { value: 'eur_nakit', label: '💶 EUR Nakit', hasSymbol: false, currency: 'EUR' },
 ];
 
 export const ASSET_LABELS: Record<string, string> = {
   hisse: '🇹🇷 BIST', usd_hisse: '🇺🇸 ABD', kripto: '₿ Kripto',
-  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 Fon', nakit: '💵 Nakit', bes: '🏦 BES', vadeli: '💰 Vadeli'
+  etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 Fon',
+  nakit: '💵 TRY Nakit', usd_nakit: '💵 USD Nakit', eur_nakit: '💶 EUR Nakit',
+  bes: '🏦 BES', vadeli: '💰 Vadeli'
 };
 
 export const FALLBACK_USD_RATE = 46.4;

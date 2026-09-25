@@ -268,12 +268,14 @@ const Analytics = () => {
       {activeTab === 'varliklar' && (() => {
         const ASSET_LABELS: Record<string, string> = {
           hisse: 'BIST Hisse', usd_hisse: 'ABD Hisse', kripto: '₿ Kripto',
-          etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 TEFAS Fon'
+          etf: '📈 ETF', doviz: '💱 Döviz', altin: '🥇 Altın', fon: '📊 TEFAS Fon',
+          nakit: '💵 TRY Nakit', usd_nakit: '💵 USD Nakit', eur_nakit: '💶 EUR Nakit'
         }
         const usdRate = prices['USDTRY=X'] || FALLBACK_USD_RATE
         const TYPE_COLORS: Record<string, string> = {
           hisse: '#35D6ED', usd_hisse: '#1A224C', kripto: '#8b5cf6',
-          etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2', fon: '#059669'
+          etf: '#f59e0b', doviz: '#10b981', altin: '#ECC703', vadeli: '#0891b2', fon: '#059669',
+          nakit: '#64748b', usd_nakit: '#16a34a', eur_nakit: '#2563eb'
         }
         const filtered = assets.filter(a => !['bes', 'vadeli'].includes(a.type) && Number(a.quantity) > 0)
         const groups: Record<string, any[]> = {}

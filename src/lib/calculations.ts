@@ -2,7 +2,7 @@ import type { Asset } from '../types/index.ts';
 import { FALLBACK_USD_RATE } from './constants.ts';
 
 export const isUSD = (type: string): boolean => {
-  return ['usd_hisse', 'kripto', 'etf'].includes(type);
+  return ['usd_hisse', 'kripto', 'etf', 'usd_nakit'].includes(type);
 };
 
 export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> = {}, usdtry: number = FALLBACK_USD_RATE): number => {
@@ -37,6 +37,14 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
+  if (a.type === 'usd_nakit') {
+    return Number(a.quantity || 0) * usdtry;
+  }
+
+  if (a.type === 'eur_nakit') {
+    return Number(a.quantity || 0) * (fetchedPrices['EURTRY=X'] || (usdtry * 1.08));
+  }
+
   const sym = a.symbol ? a.symbol.trim() : '';
   const price = (fetchedPrices && sym) 
     ? (fetchedPrices[sym] ?? fetchedPrices[sym.toUpperCase()] ?? fetchedPrices[sym.toLowerCase()]) 
@@ -67,6 +75,14 @@ export const getCostValue = (a: Asset, usdtry: number = FALLBACK_USD_RATE): numb
 
   if (a.type === 'nakit') {
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
+  }
+
+  if (a.type === 'usd_nakit') {
+    return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
+  }
+
+  if (a.type === 'eur_nakit') {
+    return Number(a.quantity || 0) * Number(a.avg_cost || (usdtry * 1.08));
   }
 
   if (isUSD(a.type)) {
