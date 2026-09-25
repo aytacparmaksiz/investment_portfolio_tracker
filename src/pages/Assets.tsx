@@ -1079,11 +1079,6 @@ const Assets = () => {
           {showForm ? 'İptal' : '+ Yeni Varlık'}
         </button>
       </div>
-      {success && (
-        <div style={{ background: 'var(--green-dim)', border: '1px solid var(--green)', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', color: 'var(--green)', fontSize: '14px', fontWeight: '600' }}>
-          ✅ {success}
-        </div>
-      )}
       
       {/* Yeni Varlık Formu */}
       {showForm && (
@@ -1242,7 +1237,6 @@ const Assets = () => {
               </span>
             </div>
           )}
-          {error && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{error}</div>}
           <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: '13px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: saving ? 0.7 : 1, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
             {saving ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
