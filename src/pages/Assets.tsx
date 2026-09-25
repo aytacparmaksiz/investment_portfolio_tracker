@@ -14,9 +14,6 @@ import { AssetsSkeleton } from '../components/SkeletonLoaders'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 
 const Assets = () => {
-  const editModalRef = useFocusTrap(!!editAsset, () => setEditAsset(null));
-  const txModalRef = useFocusTrap(!!txAsset, () => setTxAsset(null));
-  const manualModalRef = useFocusTrap(!!manualAsset, () => setManualAsset(null));
   const { user } = useAuth()
   const { refresh, prices, isHidden, portfolioId: contextPortfolioId } = usePortfolio()
   const { success: showSuccess, error: showError } = useToast()
@@ -73,6 +70,10 @@ const Assets = () => {
   const [manualSaving, setManualSaving] = useState(false)
   const [manualError, setManualError] = useState('')
   
+  const editModalRef = useFocusTrap(!!editAsset, () => setEditAsset(null))
+  const txModalRef = useFocusTrap(!!txAsset, () => setTxAsset(null))
+  const manualModalRef = useFocusTrap(!!manualAsset, () => setManualAsset(null))
+  
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
@@ -124,7 +125,14 @@ const Assets = () => {
 
   const handleSave = async () => {
     
-    if (!form.name) return setError('Varlık adı zorunludur.')
+    let finalName = form.name
+    let finalSymbol = form.symbol ? form.symbol.trim().toUpperCase() : null
+    if (form.type === 'doviz') {
+      if (!finalSymbol) finalSymbol = 'USD'
+      if (!finalName) finalName = finalSymbol === 'EUR' ? 'Euro' : finalSymbol === 'USD' ? 'Amerikan Doları' : `${finalSymbol} Döviz`
+    }
+
+    if (!finalName) return setError('Varlık adı zorunludur.')
     if (!isManual && !form.quantity) return setError('Adet zorunludur.')
     if (form.type === 'bes' && !form.avg_cost) return setError('BES için yatırılan tutar zorunludur.')
     if (isManual && !form.manual_value) return setError(form.type === 'bes' ? 'BES güncel değeri zorunludur.' : 'Değer zorunludur.')
@@ -152,10 +160,14 @@ const Assets = () => {
       .insert({
         portfolio_id: targetPid,
         type: form.type,
-        name: form.name,
-        symbol: form.symbol ? form.symbol.trim().toUpperCase() : ((form.type === 'doviz' && form.symbol === 'USD') ? 'USD' : (form.type === 'doviz' && form.symbol === 'EUR') ? 'EUR' : null),
+        name: finalName,
+        symbol: finalSymbol,
         quantity: isManual ? Number(form.manual_value || 1) : Number(form.quantity),
-        avg_cost: (form.type === 'doviz' && form.symbol === 'USD') ? (prices['USDTRY=X'] || FALLBACK_USD_RATE) : (form.type === 'doviz' && form.symbol === 'EUR') ? (prices['EURTRY=X'] || (FALLBACK_USD_RATE * 1.08)) : (form.avg_cost ? Number(form.avg_cost) : null),
+        avg_cost: form.type === 'doviz'
+          ? (finalSymbol === 'EUR'
+              ? (prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08))
+              : (prices[`${finalSymbol}TRY=X`] || prices['USDTRY=X'] || FALLBACK_USD_RATE))
+          : (form.avg_cost ? Number(form.avg_cost) : null),
         coingecko_id: form.coingecko_id ? form.coingecko_id.trim().toLowerCase() : null,
         strategy: form.type === 'usd_hisse' ? form.strategy : null,
         sector: (form.type === 'usd_hisse' || form.type === 'hisse') ? (form.sector || 'Diğer') : null
@@ -377,13 +389,24 @@ const Assets = () => {
         usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && (a.type === 'doviz' && a.symbol === 'USD'))
       }
 
-      if (usdType && usdCash) {
+      if (usdType) {
         const proceedsUSD = finalPrice * Number(txForm.quantity)
         if (proceedsUSD > 0) {
-          const currentQty = Number(usdCash.quantity || 0)
-          const newQty = Math.round((currentQty + proceedsUSD) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
-          cashCreditedNotice = ` ($${proceedsUSD.toFixed(2)} USD nakite aktarıldı)`
+          if (usdCash) {
+            const currentQty = Number(usdCash.quantity || 0)
+            const newQty = Math.round((currentQty + proceedsUSD) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Amerikan Doları',
+              symbol: 'USD',
+              type: 'doviz',
+              quantity: Math.round(proceedsUSD * 100) / 100,
+              avg_cost: prices['USDTRY=X'] || FALLBACK_USD_RATE
+            })
+          }
+          cashCreditedNotice = ` ($${proceedsUSD.toFixed(2)} USD döviz hesabına aktarıldı)`
         }
       } else {
         const proceedsTRY = tryTotal || (finalPrice * Number(txForm.quantity))
@@ -429,13 +452,15 @@ const Assets = () => {
         usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && (a.type === 'doviz' && a.symbol === 'USD'))
       }
 
-      if (usdType && usdCash) {
-        const costUSD = finalPrice * Number(txForm.quantity)
-        if (costUSD > 0) {
-          const currentQty = Number(usdCash.quantity || 0)
-          const newQty = Math.round((currentQty - costUSD) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
-          cashDeductedNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+      if (usdType) {
+        if (usdCash) {
+          const costUSD = finalPrice * Number(txForm.quantity)
+          if (costUSD > 0) {
+            const currentQty = Number(usdCash.quantity || 0)
+            const newQty = Math.round((currentQty - costUSD) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+            cashDeductedNotice = ` ($${costUSD.toFixed(2)} USD döviz hesabından düşüldü)`
+          }
         }
       } else {
         const costTRY = tryTotal || (finalPrice * Number(txForm.quantity))
@@ -523,18 +548,30 @@ const Assets = () => {
         usdCashAsset = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && (a.type === 'doviz' && a.symbol === 'USD'))
       }
 
-      if (isUsdType && usdCashAsset) {
+      if (isUsdType) {
         const usdAmount = Number(txToDelete.quantity || 0) * Number(txToDelete.price || 0)
         if (usdAmount > 0) {
-          const currentQty = Number(usdCashAsset.quantity || 0)
           if (txToDelete.type === 'buy') {
-            const newQty = Math.round((currentQty + usdAmount) * 100) / 100
-            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCashAsset.id)
-            cashNotice = ` ($${usdAmount.toFixed(2)} USD nakite iade edildi)`
-          } else if (txToDelete.type === 'sell') {
+            if (usdCashAsset) {
+              const currentQty = Number(usdCashAsset.quantity || 0)
+              const newQty = Math.round((currentQty + usdAmount) * 100) / 100
+              await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCashAsset.id)
+            } else {
+              await supabase.from('assets').insert({
+                portfolio_id: targetPid,
+                name: 'Amerikan Doları',
+                symbol: 'USD',
+                type: 'doviz',
+                quantity: Math.round(usdAmount * 100) / 100,
+                avg_cost: prices['USDTRY=X'] || FALLBACK_USD_RATE
+              })
+            }
+            cashNotice = ` ($${usdAmount.toFixed(2)} USD döviz hesabına iade edildi)`
+          } else if (txToDelete.type === 'sell' && usdCashAsset) {
+            const currentQty = Number(usdCashAsset.quantity || 0)
             const newQty = Math.round((currentQty - usdAmount) * 100) / 100
             await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCashAsset.id)
-            cashNotice = ` ($${usdAmount.toFixed(2)} USD nakitten düşüldü)`
+            cashNotice = ` ($${usdAmount.toFixed(2)} USD döviz hesabından düşüldü)`
           }
         }
       } else {
@@ -625,15 +662,12 @@ const Assets = () => {
       if (error) { setManualError(error.message); setManualSaving(false); return }
     }
 
-    if ((manualAsset.type === 'doviz' && manualAsset.symbol === 'USD')) {
-      const curUsd = manualAsset.avg_cost || prices['USDTRY=X'] || FALLBACK_USD_RATE
-      const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: curUsd, symbol: 'USD' }).eq('id', manualAsset.id)
-      if (error) { setManualError(error.message); setManualSaving(false); return }
-    }
-
-    if ((manualAsset.type === 'doviz' && manualAsset.symbol === 'EUR')) {
-      const curEur = manualAsset.avg_cost || prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)
-      const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: curEur, symbol: 'EUR' }).eq('id', manualAsset.id)
+    if (manualAsset.type === 'doviz') {
+      const sym = (manualAsset.symbol || 'USD').toUpperCase()
+      const rate = sym === 'EUR'
+        ? (manualAsset.avg_cost || prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08))
+        : (manualAsset.avg_cost || prices[`${sym}TRY=X`] || prices['USDTRY=X'] || FALLBACK_USD_RATE)
+      const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: rate, symbol: sym }).eq('id', manualAsset.id)
       if (error) { setManualError(error.message); setManualSaving(false); return }
     }
   
@@ -666,12 +700,15 @@ const Assets = () => {
     
   }
 
-  const formatCurrency = (val: number, type?: string) => {
+  const formatCurrency = (val: number, type?: string, symbol?: string) => {
     if (isHidden) return '••••••'
-    if (type === 'eur_nakit') {
+    if (type === 'eur_nakit' || (type === 'doviz' && symbol === 'EUR')) {
       return `€${Number(val).toLocaleString('de-DE', { maximumFractionDigits: 2 })}`
     }
-    return type && isUSD(type)
+    if (type === 'doviz' && symbol === 'GBP') {
+      return `£${Number(val).toLocaleString('en-GB', { maximumFractionDigits: 2 })}`
+    }
+    return (type && isUSD(type, symbol))
       ? `$${Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
       : `₺${Number(val).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
   }
@@ -687,7 +724,11 @@ const Assets = () => {
   const inputStyle = { width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)', fontSize: '14px' }
   const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }
   
-  const visibleAssets = assets.filter((asset: any) => {
+  const visibleAssets = assets.map((asset: any) => {
+    if (asset.type === 'usd_nakit') return { ...asset, type: 'doviz', symbol: 'USD', name: asset.name === 'USD Nakit' ? 'Amerikan Doları' : asset.name }
+    if (asset.type === 'eur_nakit') return { ...asset, type: 'doviz', symbol: 'EUR', name: asset.name === 'EUR Nakit' ? 'Euro' : asset.name }
+    return asset
+  }).filter((asset: any) => {
     if (['bes', 'vadeli', 'nakit', 'doviz'].includes(asset.type)) return true
     return Number(asset.quantity || 0) > 0
   })
@@ -1009,15 +1050,9 @@ const Assets = () => {
                 <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="50000" style={inputStyle} />
               </div>
             )}
-            {(manualAsset.type === 'doviz' && manualAsset.symbol === 'USD') && (
+            {manualAsset.type === 'doviz' && (
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>USD Nakit Tutarı ($)</label>
-                <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
-              </div>
-            )}
-            {(manualAsset.type === 'doviz' && manualAsset.symbol === 'EUR') && (
-              <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
+                <label style={labelStyle}>{manualAsset.symbol ? `${manualAsset.symbol} Tutarı (${manualAsset.symbol === 'EUR' ? '€' : manualAsset.symbol === 'USD' ? '$' : manualAsset.symbol})` : 'Döviz Tutarı'}</label>
                 <input type="number" inputMode="decimal" step="any" value={manualForm.value} onChange={e => setManualForm({ ...manualForm, value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             )}
@@ -1057,12 +1092,12 @@ const Assets = () => {
           <div style={{ marginBottom: '16px' }}>
             <label style={labelStyle}>Varlık Türü</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {ASSET_TYPES.filter(t => t.value !== 'doviz').map(t => (
+              {ASSET_TYPES.map(t => (
                 <button key={t.value} onClick={() => setForm({
                   ...form,
                   type: t.value,
-                  name: (!form.name || form.name === 'Nakit (TL)' || form.name === 'USD Nakit' || form.name === 'EUR Nakit')
-                    ? (t.value === 'doviz' && form.symbol === 'USD' ? 'USD Nakit' : t.value === 'doviz' && form.symbol === 'EUR' ? 'EUR Nakit' : t.value === 'nakit' ? 'Nakit (TL)' : form.name)
+                  name: (!form.name || form.name === 'Nakit (TL)' || form.name === 'Amerikan Doları' || form.name === 'Euro' || form.name === 'Döviz')
+                    ? (t.value === 'nakit' ? 'Nakit (TL)' : t.value === 'doviz' ? (form.symbol === 'EUR' ? 'Euro' : 'Amerikan Doları') : form.name)
                     : form.name
                 })}
                   style={{ padding: '7px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600',
@@ -1105,14 +1140,9 @@ const Assets = () => {
                 <div><label style={labelStyle}>Yatırılan Tutar (₺)</label><input type="number" inputMode="decimal" step="any" value={form.avg_cost} onChange={e => setForm({ ...form, avg_cost: e.target.value })} placeholder="150000" style={inputStyle} /></div>
                 <div><label style={labelStyle}>Güncel Değer (₺)</label><input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="350000" style={inputStyle} /></div>
               </div>
-            ) : (form.type === 'doviz' && form.symbol === 'USD') ? (
+            ) : form.type === 'doviz' ? (
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>USD Nakit Tutarı ($)</label>
-                <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
-              </div>
-            ) : (form.type === 'doviz' && form.symbol === 'EUR') ? (
-              <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>EUR Nakit Tutarı (€)</label>
+                <label style={labelStyle}>{form.symbol ? `${form.symbol.toUpperCase()} Tutarı` : 'Döviz Tutarı'}</label>
                 <input type="number" inputMode="decimal" step="any" value={form.manual_value} onChange={e => setForm({ ...form, manual_value: e.target.value })} placeholder="1000" style={inputStyle} />
               </div>
             ) : isVadeli ? (
@@ -1230,11 +1260,10 @@ const Assets = () => {
             usd_hisse: '#707272',
             kripto: '#8b5cf6',
             etf: '#B32132',
-            doviz: '#33622C',
+            doviz: '#16a34a',
             altin: '#ECC703',
             vadeli: '#0891b2',
-            nakit: '#64748b',
-            doviz: '#16a34a'
+            nakit: '#64748b'
           }
           const groups: Record<string, any[]> = {}
           visibleAssets.forEach(a => { 
@@ -1274,13 +1303,13 @@ const Assets = () => {
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
                           {!isManualAsset && ` · ${isHidden ? '••••••' : asset.quantity} adet`}
-                          {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${formatCurrency(asset.avg_cost, asset.type)}`}
+                          {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${formatCurrency(asset.avg_cost, asset.type, asset.symbol)}`}
                         </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isManualAsset && manualDisplayValue > 0 && (
                           <p style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
-                            {isHidden ? '••••••' : formatCurrency(manualDisplayValue, asset.type)}
+                            {isHidden ? '••••••' : formatCurrency(manualDisplayValue, asset.type, asset.symbol)}
                           </p>
                         )}
                         {isManualAsset && (

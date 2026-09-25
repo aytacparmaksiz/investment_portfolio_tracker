@@ -2,6 +2,7 @@ import type { Asset } from '../types/index.ts';
 import { FALLBACK_USD_RATE } from './constants.ts';
 
 export const isUSD = (type: string, symbol?: string): boolean => {
+  if (type === 'usd_nakit') return true;
   if (type === 'doviz') return symbol === 'USD';
   return ['usd_hisse', 'kripto', 'etf'].includes(type);
 };
@@ -38,9 +39,9 @@ export const getCurrentValue = (a: Asset, fetchedPrices: Record<string, number> 
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  if (a.type === 'doviz') {
-    if (a.symbol === 'USD') return Number(a.quantity || 0) * usdtry;
-    if (a.symbol === 'EUR') return Number(a.quantity || 0) * (fetchedPrices['EURTRY=X'] || (usdtry * 1.08));
+  if (a.type === 'doviz' || a.type === 'usd_nakit' || a.type === 'eur_nakit') {
+    if (a.symbol === 'USD' || a.type === 'usd_nakit') return Number(a.quantity || 0) * usdtry;
+    if (a.symbol === 'EUR' || a.type === 'eur_nakit') return Number(a.quantity || 0) * (fetchedPrices['EURTRY=X'] || (usdtry * 1.08));
     const price = fetchedPrices[`${a.symbol}TRY=X`] || usdtry; // fallback
     return Number(a.quantity || 0) * price;
   }
@@ -77,9 +78,9 @@ export const getCostValue = (a: Asset, usdtry: number = FALLBACK_USD_RATE): numb
     return Number(a.quantity || 0) * (Number(a.avg_cost) || 1);
   }
 
-  if (a.type === 'doviz') {
-    if (a.symbol === 'USD') return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
-    if (a.symbol === 'EUR') return Number(a.quantity || 0) * Number(a.avg_cost || (usdtry * 1.08));
+  if (a.type === 'doviz' || a.type === 'usd_nakit' || a.type === 'eur_nakit') {
+    if (a.symbol === 'USD' || a.type === 'usd_nakit') return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
+    if (a.symbol === 'EUR' || a.type === 'eur_nakit') return Number(a.quantity || 0) * Number(a.avg_cost || (usdtry * 1.08));
     return Number(a.quantity || 0) * Number(a.avg_cost || usdtry);
   }
 
