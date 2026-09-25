@@ -23,7 +23,6 @@ const BottomNav = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
               tabIndex={0}
               style={{
@@ -49,7 +48,6 @@ const BottomNav = () => {
         })}
         <button
           onClick={toggleTheme}
-          aria-label="Temayı Değiştir"
           tabIndex={0}
           style={{
             background: 'none',

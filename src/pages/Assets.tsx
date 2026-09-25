@@ -705,7 +705,7 @@ const Assets = () => {
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>Varlığı Düzenle</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{editAsset.name}</p>
               </div>
-              <button onClick={() => setEditAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() => setEditAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }} aria-label="Kapat">✕</button>
             </div>
 
             <div style={{ marginBottom: '12px' }}>
@@ -720,7 +720,7 @@ const Assets = () => {
               {editSearchResults.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
                   {editSearchResults.map((r: any) => (
-                    <div key={r.symbol} onClick={() => { 
+                    <div key={r.symbol} role="button" tabIndex={0} onClick={() => { 
                         let cleanSymbol = r.symbol; 
                         if (editAsset.type === 'hisse') cleanSymbol = r.symbol.replace('.IS', ''); 
                         setEditForm({ ...editForm, symbol: cleanSymbol, name: r.name, coingecko_id: r.id || '' }); 
@@ -766,7 +766,7 @@ const Assets = () => {
 
             {editError && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '10px', padding: '10px', marginBottom: '12px', color: 'var(--red)', fontSize: '13px', fontWeight: '600' }}>{editError}</div>}
             
-            <button onClick={handleEditSave} disabled={editSaving} style={{ width: '100%', padding: '14px', background: '#3b82f6', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: editSaving ? 0.7 : 1 }}>
+            <button onClick={handleEditSave} disabled={editSaving} style={{ width: '100%', padding: '14px', background: 'var(--accent)', borderRadius: '12px', color: 'white', fontWeight: '700', fontSize: '15px', opacity: editSaving ? 0.7 : 1 }}>
               {editSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
             </button>
           </div>
@@ -779,7 +779,7 @@ const Assets = () => {
           <div className="modal-content" ref={txModalRef}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{txAsset.name}</h3>
-              <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }} aria-label="Kapat">✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
               Mevcut: <strong>{isHidden ? '••••••' : `${txAsset.quantity} adet`}</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
@@ -947,7 +947,7 @@ const Assets = () => {
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
                       </div>
-                      <button onClick={() => handleDeleteTx(tx.id)} disabled={txSaving} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }} title="İşlemi Sil">✕</button>
+                      <button onClick={() => handleDeleteTx(tx.id)} disabled={txSaving} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }} title="İşlemi Sil" aria-label="Kapat">✕</button>
                     </div>
                   </div>
                 ))}
@@ -966,7 +966,7 @@ const Assets = () => {
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{manualAsset.name}</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Manuel değer güncelle</p>
               </div>
-              <button onClick={() => setManualAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
+              <button onClick={() => setManualAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }} aria-label="Kapat">✕</button>
             </div>
             {manualAsset.type === 'bes' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
@@ -1085,7 +1085,7 @@ const Assets = () => {
               {searchResults.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: '10px', boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
                   {searchResults.map((r: any) => (
-                    <div key={r.symbol} onClick={() => { let cleanSymbol = r.symbol; if (form.type === 'hisse') cleanSymbol = r.symbol.replace('.IS', ''); setForm({ ...form, symbol: cleanSymbol, name: r.name, coingecko_id: r.id || '' }); setSearchResults([]); }}
+                    <div key={r.symbol} role="button" tabIndex={0} onClick={() => { let cleanSymbol = r.symbol; if (form.type === 'hisse') cleanSymbol = r.symbol.replace('.IS', ''); setForm({ ...form, symbol: cleanSymbol, name: r.name, coingecko_id: r.id || '' }); setSearchResults([]); }}
                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
@@ -1245,7 +1245,7 @@ const Assets = () => {
           
             return (
               <div key={type} style={{ marginBottom: '12px' }}>
-                <div onClick={() => toggleGroup(type)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: isExpanded ? '10px' : '0', padding: '10px 0', cursor: 'pointer' }}>
+                <div role="button" tabIndex={0} onClick={() => toggleGroup(type)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: isExpanded ? '10px' : '0', padding: '10px 0', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor }} />
                     <p style={{ fontWeight: '700', fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -1283,7 +1283,7 @@ const Assets = () => {
                         )}
                         {!isManualAsset && (
                           <>
-                            <button onClick={() => openEditModal(asset)} style={{ background: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', color: '#3b82f6', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
+                            <button onClick={() => openEditModal(asset)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>Düzenle</button>
                             <button onClick={() => openTxModal(asset)} style={{ background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', padding: '6px 10px', fontSize: '11px', fontWeight: '700' }}>İşlem</button>
                           </>
                         )}

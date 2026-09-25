@@ -330,7 +330,7 @@ const Analytics = () => {
                   transition: 'all 0.2s ease'
                 }}>
                   <div
-                    onClick={() => {
+                    role="button" tabIndex={0} onClick={() => {
                       const next = new Set(expandedAssetGroups)
                       if (next.has(type)) next.delete(type); else next.add(type)
                       setExpandedAssetGroups(next)
@@ -438,7 +438,7 @@ const Analytics = () => {
   
                       return (
                         <div key={sectorKey} style={{ paddingLeft: '8px', marginTop: '8px', marginBottom: '8px' }}>
-                          <div onClick={() => {
+                          <div role="button" tabIndex={0} onClick={() => {
                             const next = new Set(expandedSectors)
                             if (next.has(sectorKey)) next.delete(sectorKey)
                             else next.add(sectorKey)

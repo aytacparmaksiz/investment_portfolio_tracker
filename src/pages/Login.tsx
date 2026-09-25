@@ -74,6 +74,7 @@ const Login = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ornek@email.com"
+            aria-label="ornek@email.com"
             style={inputStyle}
           />
         </div>
@@ -85,6 +86,7 @@ const Login = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="********"
+            aria-label="********"
             style={inputStyle}
           />
         </div>

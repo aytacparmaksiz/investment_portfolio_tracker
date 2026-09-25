@@ -6,12 +6,14 @@ import { supabase } from '../lib/supabase'
 import { fetchHistoricalRatesBatch } from '../lib/historicalRate'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts'
 import { GoalsSkeleton } from '../components/SkeletonLoaders'
+import { useToast } from '../context/ToastContext'
 
 const GOAL_USD = 1000000
 const WITHDRAWAL_RATE = 0.04
 const MILESTONES = [100000, 250000, 500000, 750000, 1000000]
 
 const Goals = () => {
+  const toast = useToast()
   const { assets, prices, portfolioId, isHidden } = usePortfolio()
   
   const [activeTab, setActiveTab] = useState<'hedefler' | 'fire'>('hedefler')
@@ -367,12 +369,14 @@ const Goals = () => {
     })
     setAssetForm({ name: '', value_try: '', category: 'ev' })
     setShowAssetForm(false)
+    toast.success('Duran varlık eklendi!')
     fetchData()
   }
 
   const handleDeleteManualAsset = async (id: string) => {
     if (!confirm('Silmek istediğine emin misin?')) return
     await supabase.from('manual_assets').delete().eq('id', id)
+    toast.success('Duran varlık silindi!')
     fetchData()
   }
 
@@ -399,8 +403,10 @@ const Goals = () => {
 
     try {
       await supabase.from('liabilities').insert(newLiability)
+      toast.success('Borç / Kredi eklendi!')
     } catch {
       // offline/table fallback
+      toast.error('Borç eklenirken bir hata oluştu.')
     }
 
     setLiabilityForm({ name: '', amount: '', currency: 'TRY', monthly_payment: '', interest_rate: '' })
@@ -418,8 +424,10 @@ const Goals = () => {
 
     try {
       await supabase.from('liabilities').delete().eq('id', id)
+      toast.success('Borç / Kredi silindi!')
     } catch {
       // offline/table fallback
+      toast.error('Borç silinirken bir hata oluştu.')
     }
   }
 
@@ -443,12 +451,14 @@ const Goals = () => {
     setSavingForm({ month: getTodayDate().slice(0, 7), amount_try: '', income_try: '', note: '' })
     setSavingType('giris')
     setShowSavingForm(false)
+    toast.success('Tasarruf kaydedildi!')
     fetchData()
   }
 
   const handleDeleteSaving = async (id: string) => {
     if (!confirm('Bu aya ait tasarruf kaydını silmek istediğine emin misin?')) return
     await supabase.from('savings').delete().eq('id', id)
+    toast.success('Tasarruf silindi!')
     fetchData()
   }
 
@@ -665,7 +675,7 @@ const Goals = () => {
 
           {/* Dağılım Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowDistribution(!showDistribution)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} role="button" tabIndex={0} onClick={() => setShowDistribution(!showDistribution)}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>Varlık & Yükümlülük Dağılımı</p>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showDistribution ? '▲ Gizle' : '▼ Göster'}</span>
             </div>
@@ -697,7 +707,7 @@ const Goals = () => {
           {/* Duran Varlıklar Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowAssetList(!showAssetList)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} role="button" tabIndex={0} onClick={() => setShowAssetList(!showAssetList)}>
                 <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>🏠 Duran Varlıklar</p>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showAssetList ? '▲ Gizle' : '▼ Göster'}</span>
               </div>
@@ -749,7 +759,7 @@ const Goals = () => {
           {/* Borçlar & Yükümlülükler (Liabilities) Kartı */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowLiabilityList(!showLiabilityList)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} role="button" tabIndex={0} onClick={() => setShowLiabilityList(!showLiabilityList)}>
                 <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>💳 Borçlar & Yükümlülükler</p>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{showLiabilityList ? '▲ Gizle' : '▼ Göster'}</span>
               </div>
@@ -934,7 +944,7 @@ const Goals = () => {
                         {s.note && <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px' }}>· {s.note}</span>}
                       </div>
                       <button onClick={() => handleDeleteSaving(s.id)} 
-                        style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px', flexShrink: 0 }}>
+                        style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '13px', flexShrink: 0 }} aria-label="Kapat">
                         ✕
                       </button>
                     </div>
@@ -1048,7 +1058,7 @@ const Goals = () => {
                           <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(fireData.fireTargetUSD)}</p>
                         </div>
                         <div 
-                          onClick={() => setShowReturnDetails(!showReturnDetails)}
+                          role="button" tabIndex={0} onClick={() => setShowReturnDetails(!showReturnDetails)}
                           onMouseEnter={() => setShowReturnDetails(true)} 
                           onMouseLeave={() => setShowReturnDetails(false)}
                           style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px', position: 'relative', cursor: 'pointer' }}

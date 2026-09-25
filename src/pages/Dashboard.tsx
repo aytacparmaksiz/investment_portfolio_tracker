@@ -9,7 +9,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { getCurrentValue, getCostValue, isUSD } from '../lib/calculations'
 import { DashboardSkeleton } from '../components/SkeletonLoaders'
-
+import { useToast } from '../context/ToastContext'
 const COLORS = ['#6366f1', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed', '#0891b2']
 
 const ASSET_LABELS: Record<string, string> = {
@@ -23,6 +23,7 @@ const Dashboard = () => {
   const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, isHidden, setIsHidden } = usePortfolio()
   const navigate = useNavigate()
   const location = useLocation()
+  const toast = useToast()
   const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -76,10 +77,25 @@ const Dashboard = () => {
       p_portfolio_id: portfolioId,
       p_email: inviteEmail
     })
-    if (error) { setInviteStatus('error'); return }
-    if (data === 'user_not_found') setInviteStatus('not_found')
-    else if (data === 'already_member') setInviteStatus('already')
-    else setInviteStatus('success')
+    if (error) { 
+      setInviteStatus('error')
+      toast.error('Davet gönderilirken bir hata oluştu.')
+      return 
+    }
+    if (data === 'user_not_found') {
+      setInviteStatus('not_found')
+      toast.error('Kullanıcı bulunamadı. Önce kayıt olması gerekiyor.')
+    }
+    else if (data === 'already_member') {
+      setInviteStatus('already')
+      toast.error('Bu kullanıcı zaten üye.')
+    }
+    else {
+      setInviteStatus('success')
+      toast.success('Davet başarıyla gönderildi!')
+      setShowInvite(false)
+      setInviteEmail('')
+    }
   }
 
   
@@ -305,7 +321,7 @@ const Dashboard = () => {
             <div style={{ flex: 1 }}>
               {pieData.map((item: any, i: number) => (
                 <div key={i}
-                  onClick={() => setSelectedGroup(selectedGroup === item.type ? null : item.type)}
+                  role="button" tabIndex={0} onClick={() => setSelectedGroup(selectedGroup === item.type ? null : item.type)}
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', background: selectedGroup === item.type ? 'var(--bg-elevated)' : 'none', transition: 'background 0.15s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: COLORS[i % COLORS.length] }} />
@@ -359,7 +375,7 @@ const Dashboard = () => {
                         {strategyData.map((item: any, i: number) => {
                           const weight = group.value > 0 ? ((item.value / group.value) * 100).toFixed(1) : 0
                           return (
-                            <div key={i} onClick={() => setSelectedStrategy(item.name)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <div key={i} role="button" tabIndex={0} onClick={() => setSelectedStrategy(item.name)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: ['#f59e0b', '#10b981', '#6366f1', '#8b5cf6'][i % 4] }} />
                                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.name}</span>
@@ -442,7 +458,7 @@ const Dashboard = () => {
 
             return (
               <div key={gi} style={{ marginBottom: '8px' }}>
-                <div onClick={() => {
+                <div role="button" tabIndex={0} onClick={() => {
                     const next = new Set(expandedGroups)
                     if (next.has(group.type)) next.delete(group.type)
                     else next.add(group.type)
@@ -528,7 +544,7 @@ const Dashboard = () => {
           <div style={{ marginTop: '14px' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                placeholder="esim@email.com"
+                placeholder="esim@email.com" aria-label="esim@email.com"
                 style={{ flex: 1, padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)', fontSize: '14px' }} />
               <button onClick={handleInvite}
                 style={{ padding: '10px 16px', background: 'var(--accent)', borderRadius: '10px', color: 'white', fontWeight: '600', fontSize: '14px' }}>
