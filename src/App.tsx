@@ -73,14 +73,21 @@ const AppRoutes = () => {
   )
 }
 
+import { ThemeProvider } from './context/ThemeContext'
+import { ToastProvider } from './context/ToastContext'
+
 const App = () => {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <PortfolioProvider>
-          <AppRoutes />
-        </PortfolioProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <PortfolioProvider>
+              <AppRoutes />
+            </PortfolioProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

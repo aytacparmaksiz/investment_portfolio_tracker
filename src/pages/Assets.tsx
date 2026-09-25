@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { isUSD, getCurrentValue, getCostValue } from '../lib/calculations'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
+import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import { addTransaction, fetchTransactions, deleteTransaction, syncInitialTransaction } from '../lib/transactions'
 import { fetchHistoricalRate } from '../lib/historicalRate'
@@ -9,10 +10,15 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { ASSET_TYPES, ASSET_LABELS, SECTOR_OPTIONS, FALLBACK_USD_RATE, getTodayDate } from '../lib/constants'
 import { useAssetSearch } from '../hooks/useAssetSearch'
 import { AssetsSkeleton } from '../components/SkeletonLoaders'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 const Assets = () => {
+  const editModalRef = useFocusTrap(!!editAsset, () => setEditAsset(null));
+  const txModalRef = useFocusTrap(!!txAsset, () => setTxAsset(null));
+  const manualModalRef = useFocusTrap(!!manualAsset, () => setManualAsset(null));
   const { user } = useAuth()
   const { refresh, prices, isHidden, portfolioId: contextPortfolioId } = usePortfolio()
+  const { success: showSuccess, error: showError } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
   const [assets, setAssets] = useState<any[]>([])
@@ -20,8 +26,9 @@ const Assets = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+
+  const setError = showError;
+  const setSuccess = showSuccess;
 
   const [form, setForm] = useState({
     type: 'hisse', name: '', symbol: '', quantity: '', avg_cost: '', manual_value: '',
@@ -115,7 +122,7 @@ const Assets = () => {
   }
 
   const handleSave = async () => {
-    setError('')
+    
     if (!form.name) return setError('Varlık adı zorunludur.')
     if (!isManual && !form.quantity) return setError('Adet zorunludur.')
     if (form.type === 'bes' && !form.avg_cost) return setError('BES için yatırılan tutar zorunludur.')
@@ -254,13 +261,13 @@ const Assets = () => {
     fetchData()
     refresh(true)
     setSaving(false)
-    setTimeout(() => setSuccess(''), 3000)
+    
   }
 
   // --- DÜZENLEME (EDIT) FONKSİYONLARI ---
   const openEditModal = (asset: any) => {
     setEditAsset(asset)
-    setEditError('')
+    
     setEditForm({
       name: asset.name || '',
       symbol: asset.symbol || '',
@@ -306,7 +313,7 @@ const Assets = () => {
     fetchData()
     refresh(true)
     setSuccess('Varlık başarıyla düzenlendi!')
-    setTimeout(() => setSuccess(''), 3000)
+    
   }
 
   const handleDelete = async (id: string) => {
@@ -323,13 +330,13 @@ const Assets = () => {
     setDeductCashOnBuy(true)
     setTxForm({ quantity: '', price: '', tryTotal: '', date: getTodayDate(), note: '', manualRate: '' })
     setTxRateNotFound(false)
-    setTxError('')
+    
     const history = await fetchTransactions(asset.id)
     setTxHistory(history)
   }
 
   const handleTxSave = async () => {
-    setTxError('')
+    
     const usdType = isUSD(txAsset.type)
     if (!txForm.quantity || !txForm.price) return setTxError('Adet ve fiyat zorunludur.')
     if (txType === 'sell' && Number(txForm.quantity) > Number(txAsset.quantity)) {
@@ -457,7 +464,7 @@ const Assets = () => {
     fetchData()
     refresh(true)
     setSuccess(`İşlem kaydedildi!${cashCreditedNotice}${cashDeductedNotice}`)
-    setTimeout(() => setSuccess(''), 3000)
+    
   }
 
   const handleQuickSell = (percentage: number) => {
@@ -476,7 +483,7 @@ const Assets = () => {
   const handleDeleteTx = async (txId: string) => {
     if (!confirm('Bu işlemi silmek istediğinize emin misiniz? Ortalama maliyet yeniden hesaplanacak.')) return
     setTxSaving(true)
-    setTxError('')
+    
 
     // 1. Silinecek işlemi bul (önce geçmiş listesinden, yoksa Supabase'den sorgula)
     let txToDelete = txHistory.find((t: any) => t.id === txId)
@@ -586,7 +593,7 @@ const Assets = () => {
     await refresh(true)
     setTxSaving(false)
     setSuccess(`İşlem silindi ve maliyet güncellendi.${cashNotice}`)
-    setTimeout(() => setSuccess(''), 3000)
+    
   }
 
   const openManualUpdateModal = (asset: any) => {
@@ -594,7 +601,7 @@ const Assets = () => {
     const isCashAsset = ['nakit', 'usd_nakit', 'eur_nakit'].includes(asset.type)
     const currentValue = isCashAsset ? Number(asset.quantity || 0) : Number(lastManualValue || asset.principal || 0)
     setManualAsset(asset)
-    setManualError('')
+    
     setManualForm({
       value: currentValue ? String(currentValue) : '',
       principal: asset.principal ? String(asset.principal) : asset.avg_cost ? String(asset.avg_cost) : '',
@@ -606,7 +613,7 @@ const Assets = () => {
   
   const handleManualUpdate = async () => {
     if (!manualAsset) return
-    setManualError('')
+    
     if (!manualForm.value) return setManualError('Güncel değer zorunludur.')
     if (manualAsset.type === 'bes' && !manualForm.principal) return setManualError('BES için yatırılan tutar zorunludur.')
     setManualSaving(true)
@@ -655,7 +662,7 @@ const Assets = () => {
     fetchData()
     refresh(true)
     setSuccess('Varlık değeri güncellendi!')
-    setTimeout(() => setSuccess(''), 3000)
+    
   }
 
   const formatCurrency = (val: number, type?: string) => {
@@ -691,8 +698,8 @@ const Assets = () => {
       
       {/* Düzenleme (Edit) Modalı */}
       {editAsset && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content" ref={editModalRef}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>Varlığı Düzenle</h3>
@@ -768,8 +775,8 @@ const Assets = () => {
 
       {/* İşlem Modalı */}
       {txAsset && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content" ref={txModalRef}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{txAsset.name}</h3>
               <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }}>✕</button>
@@ -952,8 +959,8 @@ const Assets = () => {
       
       {/* Manuel Varlık Güncelleme Modalı */}
       {manualAsset && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content" ref={manualModalRef}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-primary)' }}>{manualAsset.name}</h3>

@@ -1,23 +1,23 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const Login = () => {
   const { signIn, signUp } = useAuth();
+  const { error: showError } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const toggleMode = () => setIsSignUp((v) => !v);
 
   const handleSubmit = async () => {
     setLoading(true);
-    setError('');
     const { error } = isSignUp
       ? await signUp(email, password)
       : await signIn(email, password);
-    if (error) setError(error.message);
+    if (error) showError(error.message);
     setLoading(false);
   };
 
@@ -89,21 +89,7 @@ const Login = () => {
           />
         </div>
 
-        {error && (
-          <div
-            style={{
-              background: '#ef444420',
-              border: '1px solid var(--red)',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '16px',
-              color: 'var(--red)',
-              fontSize: '14px',
-            }}
-          >
-            {error}
-          </div>
-        )}
+
 
         <button
           onClick={handleSubmit}
