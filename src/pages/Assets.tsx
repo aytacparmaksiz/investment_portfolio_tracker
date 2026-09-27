@@ -925,7 +925,7 @@ const Assets = () => {
               <button onClick={() => setTxAsset(null)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', width: '32px', height: '32px', fontSize: '16px' }} aria-label="Kapat">✕</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-              Mevcut: <strong>{isHidden ? '••••••' : `${txAsset.quantity} adet`}</strong> · Ort: <strong>{formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
+              Mevcut: <strong>{isHidden ? '••••••' : `${txAsset.quantity} adet`}</strong> · Ort: <strong>{isHidden ? '••••••' : formatCurrency(txAsset.avg_cost, txAsset.type)}</strong>
             </p>
             <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '12px', padding: '3px', marginBottom: '20px', border: '1px solid var(--border)' }}>
               <button onClick={() => setTxType('buy')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', background: txType === 'buy' ? 'var(--green)' : 'none', color: txType === 'buy' ? 'white' : 'var(--text-secondary)', transition: 'all 0.2s' }}>↑ Alım</button>
@@ -1088,7 +1088,7 @@ const Assets = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{isHidden ? '••••••' : `${tx.quantity} adet`}</p>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{formatCurrency(tx.price, txAsset.type)}</p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{isHidden ? '••••••' : formatCurrency(tx.price, txAsset.type)}</p>
                       </div>
                       <button onClick={() => handleDeleteTx(tx.id)} disabled={txSaving} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: '800', fontSize: '16px', opacity: txSaving ? 0.5 : 1, padding: '4px' }} title="İşlemi Sil" aria-label="Kapat">✕</button>
                     </div>
@@ -1398,7 +1398,7 @@ const Assets = () => {
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
                           {!isManualAsset && ` · ${isHidden ? '••••••' : asset.quantity} adet`}
-                          {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${formatCurrency(asset.avg_cost, asset.type, asset.symbol)}`}
+                          {!isManualAsset && asset.avg_cost > 0 && ` · Ort: ${isHidden ? '••••••' : formatCurrency(asset.avg_cost, asset.type, asset.symbol)}`}
                         </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
