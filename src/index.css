@@ -180,6 +180,8 @@ button:active {
 .modal-overlay {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.45);
   z-index: 1000;
   display: flex;
@@ -198,7 +200,8 @@ button:active {
   padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
   width: 100%;
   max-width: 480px;
-  max-height: min(85vh, 85dvh);
+  max-height: calc(100dvh - 32px);
+  max-height: calc(100% - 32px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
