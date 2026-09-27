@@ -183,8 +183,9 @@ button:active {
   background: rgba(0, 0, 0, 0.45);
   z-index: 1000;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  padding: 16px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -192,12 +193,12 @@ button:active {
 .modal-content {
   background: var(--bg-card);
   color: var(--text-primary);
-  border-radius: 20px 20px 0 0;
+  border-radius: 20px;
   padding: 24px 24px 24px 24px;
   padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
   width: 100%;
   max-width: 480px;
-  max-height: 85vh;
+  max-height: min(85vh, 85dvh);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
