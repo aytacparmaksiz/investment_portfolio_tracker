@@ -203,6 +203,8 @@ const Assets = () => {
             const currentQty = Number(cashAsset.quantity || 0)
             const newQty = Math.round((currentQty - costTRY) * 100) / 100
             await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+          } else if (targetPid) {
+            await supabase.from('assets').insert({ portfolio_id: targetPid, name: 'Nakit (TL)', symbol: 'TL', type: 'nakit', quantity: -Math.round(costTRY * 100) / 100, avg_cost: 1 })
           }
         }
       }
@@ -253,13 +255,25 @@ const Assets = () => {
         usdCash = dbUsdCash || assets.find((a: any) => a.portfolio_id === targetPid && (a.type === 'doviz' && a.symbol === 'USD'))
       }
 
-      if (isUsdType && usdCash) {
+      if (isUsdType) {
         const costUSD = Number(form.avg_cost) * Number(form.quantity)
         if (costUSD > 0) {
-          const currentQty = Number(usdCash.quantity || 0)
-          const newQty = Math.round((currentQty - costUSD) * 100) / 100
-          await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
-          newAssetCashNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+          if (usdCash) {
+            const currentQty = Number(usdCash.quantity || 0)
+            const newQty = Math.round((currentQty - costUSD) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+            newAssetCashNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Amerikan Doları',
+              symbol: 'USD',
+              type: 'doviz',
+              quantity: -Math.round(costUSD * 100) / 100,
+              avg_cost: prices['USDTRY=X'] || FALLBACK_USD_RATE
+            })
+            newAssetCashNotice = ` ($${costUSD.toFixed(2)} USD nakitten düşüldü)`
+          }
         }
       } else {
         const costTRY = isUsdType ? Number(form.avg_cost) * Number(form.quantity) * currentRate : Number(form.avg_cost) * Number(form.quantity)
@@ -275,6 +289,16 @@ const Assets = () => {
             const currentQty = Number(cashAsset.quantity || 0)
             const newQty = Math.round((currentQty - costTRY) * 100) / 100
             await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+            newAssetCashNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Nakit (TL)',
+              symbol: 'TL',
+              type: 'nakit',
+              quantity: -Math.round(costTRY * 100) / 100,
+              avg_cost: 1
+            })
             newAssetCashNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
           }
         }
@@ -484,12 +508,22 @@ const Assets = () => {
       }
 
       if (usdType) {
-        if (usdCash) {
-          const costUSD = finalPrice * Number(txForm.quantity)
-          if (costUSD > 0) {
+        const costUSD = finalPrice * Number(txForm.quantity)
+        if (costUSD > 0) {
+          if (usdCash) {
             const currentQty = Number(usdCash.quantity || 0)
             const newQty = Math.round((currentQty - costUSD) * 100) / 100
             await supabase.from('assets').update({ quantity: newQty }).eq('id', usdCash.id)
+            cashDeductedNotice = ` ($${costUSD.toFixed(2)} USD döviz hesabından düşüldü)`
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Amerikan Doları',
+              symbol: 'USD',
+              type: 'doviz',
+              quantity: -Math.round(costUSD * 100) / 100,
+              avg_cost: prices['USDTRY=X'] || FALLBACK_USD_RATE
+            })
             cashDeductedNotice = ` ($${costUSD.toFixed(2)} USD döviz hesabından düşüldü)`
           }
         }
@@ -507,6 +541,16 @@ const Assets = () => {
             const currentQty = Number(cashAsset.quantity || 0)
             const newQty = Math.round((currentQty - costTRY) * 100) / 100
             await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+            cashDeductedNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
+          } else if (targetPid) {
+            await supabase.from('assets').insert({
+              portfolio_id: targetPid,
+              name: 'Nakit (TL)',
+              symbol: 'TL',
+              type: 'nakit',
+              quantity: -Math.round(costTRY * 100) / 100,
+              avg_cost: 1
+            })
             cashDeductedNotice = ` (₺${Math.round(costTRY).toLocaleString('tr-TR')} nakitten düşüldü)`
           }
         }
@@ -713,6 +757,8 @@ const Assets = () => {
           await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
         } else if (diffTRY < 0 && targetPid) {
           await supabase.from('assets').insert({ portfolio_id: targetPid, name: 'Nakit (TL)', symbol: 'TL', type: 'nakit', quantity: Math.round(Math.abs(diffTRY) * 100) / 100, avg_cost: 1 })
+        } else if (diffTRY > 0 && targetPid) {
+          await supabase.from('assets').insert({ portfolio_id: targetPid, name: 'Nakit (TL)', symbol: 'TL', type: 'nakit', quantity: -Math.round(diffTRY * 100) / 100, avg_cost: 1 })
         }
       }
     }
