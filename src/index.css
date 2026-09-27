@@ -181,7 +181,7 @@ button:active {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 100;
+  z-index: 1000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -193,11 +193,13 @@ button:active {
   background: var(--bg-card);
   color: var(--text-primary);
   border-radius: 20px 20px 0 0;
-  padding: 24px;
+  padding: 24px 24px 24px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
   width: 100%;
   max-width: 480px;
   max-height: 85vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
 }

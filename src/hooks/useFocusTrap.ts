@@ -2,13 +2,18 @@ import { useEffect, useRef } from 'react';
 
 export const useFocusTrap = (isOpen: boolean, onClose: () => void) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (onCloseRef.current) onCloseRef.current();
         return;
       }
 
@@ -51,7 +56,7 @@ export const useFocusTrap = (isOpen: boolean, onClose: () => void) => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return modalRef;
 };

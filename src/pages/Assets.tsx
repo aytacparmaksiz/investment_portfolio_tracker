@@ -192,6 +192,20 @@ const Assets = () => {
         const curEur = prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)
         await supabase.from('assets').update({ quantity: Number(form.manual_value), avg_cost: curEur, symbol: 'EUR' }).eq('id', asset.id)
       }
+      if (form.type === 'doviz') {
+        const sym = (form.symbol || 'USD').toUpperCase()
+        const rate = sym === 'EUR' ? (prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)) : (prices[`${sym}TRY=X`] || prices['USDTRY=X'] || FALLBACK_USD_RATE)
+        const costTRY = Number(form.manual_value) * rate
+        if (costTRY > 0) {
+          const { data: dbCash } = await supabase.from('assets').select('*').eq('portfolio_id', targetPid).eq('type', 'nakit').maybeSingle()
+          const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+          if (cashAsset) {
+            const currentQty = Number(cashAsset.quantity || 0)
+            const newQty = Math.round((currentQty - costTRY) * 100) / 100
+            await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+          }
+        }
+      }
       if (isVadeli && form.interest_rate && form.maturity_days) {
         const [y, m, d] = (form.start_date || getTodayDate()).split('-').map(Number)
         const maturityDate = new Date(Date.UTC(y, m - 1, d + Number(form.maturity_days), 12, 0, 0))
@@ -331,6 +345,23 @@ const Assets = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Bu varlığı silmek istediğinize emin misiniz?')) return
+    const assetToDelete = assets.find((a: any) => a.id === id)
+    if (assetToDelete && assetToDelete.type === 'doviz') {
+      const sym = (assetToDelete.symbol || 'USD').toUpperCase()
+      const rate = sym === 'EUR' ? (assetToDelete.avg_cost || prices['EURTRY=X'] || ((prices['USDTRY=X'] || FALLBACK_USD_RATE) * 1.08)) : (assetToDelete.avg_cost || prices[`${sym}TRY=X`] || prices['USDTRY=X'] || FALLBACK_USD_RATE)
+      const tryValue = Number(assetToDelete.quantity || 0) * rate
+      if (tryValue > 0) {
+        const targetPid = assetToDelete.portfolio_id || portfolioId || contextPortfolioId
+        const { data: dbCash } = await supabase.from('assets').select('*').eq('portfolio_id', targetPid).eq('type', 'nakit').maybeSingle()
+        const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+        if (cashAsset) {
+          const newQty = Math.round((Number(cashAsset.quantity || 0) + tryValue) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+        } else if (targetPid) {
+          await supabase.from('assets').insert({ portfolio_id: targetPid, name: 'Nakit (TL)', symbol: 'TL', type: 'nakit', quantity: Math.round(tryValue * 100) / 100, avg_cost: 1 })
+        }
+      }
+    }
     await supabase.from('assets').delete().eq('id', id)
     fetchData()
     refresh(true)
@@ -669,6 +700,21 @@ const Assets = () => {
         : (manualAsset.avg_cost || prices[`${sym}TRY=X`] || prices['USDTRY=X'] || FALLBACK_USD_RATE)
       const { error } = await supabase.from('assets').update({ quantity: value, avg_cost: rate, symbol: sym }).eq('id', manualAsset.id)
       if (error) { setManualError(error.message); setManualSaving(false); return }
+
+      const diff = value - Number(manualAsset.quantity || 0)
+      if (diff !== 0) {
+        const diffTRY = diff * rate
+        const targetPid = manualAsset.portfolio_id || portfolioId || contextPortfolioId
+        const { data: dbCash } = await supabase.from('assets').select('*').eq('portfolio_id', targetPid).eq('type', 'nakit').maybeSingle()
+        const cashAsset = dbCash || assets.find((a: any) => a.portfolio_id === targetPid && a.type === 'nakit')
+        if (cashAsset) {
+          const currentQty = Number(cashAsset.quantity || 0)
+          const newQty = Math.round((currentQty - diffTRY) * 100) / 100
+          await supabase.from('assets').update({ quantity: newQty, avg_cost: 1 }).eq('id', cashAsset.id)
+        } else if (diffTRY < 0 && targetPid) {
+          await supabase.from('assets').insert({ portfolio_id: targetPid, name: 'Nakit (TL)', symbol: 'TL', type: 'nakit', quantity: Math.round(Math.abs(diffTRY) * 100) / 100, avg_cost: 1 })
+        }
+      }
     }
   
     if (manualAsset.type === 'bes') {
