@@ -253,6 +253,16 @@ const Analytics = () => {
     { label: '1Y', value: 365 },
   ]
 
+  const formatGain = (val: number) => {
+    if (isHidden) return '••••••'
+    const isU = displayCurrency === 'USD'
+    const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+    const v = isU ? val / usdRateLocal : val
+    const abs = Math.abs(v)
+    const formatted = new Intl.NumberFormat(isU ? 'en-US' : 'tr-TR', { maximumFractionDigits: 0 }).format(abs)
+    return `${val >= 0 ? '+' : '-'}${isU ? '$' : '₺'}${formatted}`
+  }
+
   const card = {
     background: 'var(--bg-card)',
     border: '1px solid var(--border)',
@@ -403,7 +413,7 @@ const Analytics = () => {
                             marginTop: '2px',
                             margin: 0
                           }}>
-                            {isHidden ? '••••••' : `${groupGain >= 0 ? '+' : '-'}₺${Math.round(Math.abs(groupGain)).toLocaleString('tr-TR')}`}
+                            {formatGain(groupGain)}
                           </p>
                         </div>
                       ) : null}
@@ -490,7 +500,7 @@ const Analytics = () => {
                                   </div>
                                   <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                     <p style={{ fontSize: '15px', fontWeight: '800', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                                      {isHidden ? '••••••' : (gain >= 0 ? `+₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : `-₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`)}
+                                      {formatGain(gain)}
                                     </p>
                                     <p style={{ fontSize: '11px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                       {isHidden ? '••••••' : `${gain >= 0 ? '▲' : '▼'} ${Math.abs(gainPct).toFixed(2)}%`}
@@ -553,7 +563,7 @@ const Analytics = () => {
                           </div>
                           <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                             <p style={{ fontSize: '15px', fontWeight: '800', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                              {isHidden ? '••••••' : (gain >= 0 ? `+₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : `-₺${Math.abs(gain).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`)}
+                              {formatGain(gain)}
                             </p>
                             <p style={{ fontSize: '11px', fontWeight: '700', color: gain >= 0 ? 'var(--green)' : 'var(--red)' }}>
                               {isHidden ? '••••••' : `${gain >= 0 ? '▲' : '▼'} ${Math.abs(gainPct).toFixed(2)}%`}
@@ -732,7 +742,7 @@ const Analytics = () => {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                      <YAxis domain={[(dataMin: number) => dataMin < 0 ? Math.floor(dataMin * 1.005) : Math.floor(dataMin * 0.995), (dataMax: number) => dataMax < 0 ? Math.ceil(dataMax * 0.995) : Math.ceil(dataMax * 1.005)]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis domain={[(dataMin: number) => { const minDeger = chartData.length ? Math.min(...chartData.map(d => d.deger)) : dataMin; return minDeger < 0 ? Math.floor(minDeger * 1.005) : Math.floor(minDeger * 0.995); }, (dataMax: number) => { const maxDeger = chartData.length ? Math.max(...chartData.map(d => d.deger)) : dataMax; return maxDeger < 0 ? Math.ceil(maxDeger * 0.995) : Math.ceil(maxDeger * 1.005); }]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                       <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                       <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
                       <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
