@@ -756,7 +756,22 @@ const Analytics = () => {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                      <YAxis domain={[(dataMin: number) => { const minDeger = chartData.length ? Math.min(...chartData.map(d => d.deger)) : dataMin; return minDeger < 0 ? Math.floor(minDeger * 1.005) : Math.floor(minDeger * 0.995); }, (dataMax: number) => { const maxDeger = chartData.length ? Math.max(...chartData.map(d => d.deger)) : dataMax; return maxDeger < 0 ? Math.ceil(maxDeger * 0.995) : Math.ceil(maxDeger * 1.005); }]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis domain={[
+                        (dataMin: number) => { 
+                          const minDeger = chartData.length ? Math.min(...chartData.map(d => d.deger)) : dataMin; 
+                          const maxDeger = chartData.length ? Math.max(...chartData.map(d => d.deger)) : dataMin;
+                          let minB = minDeger < 0 ? Math.floor(minDeger * 1.005) : Math.floor(minDeger * 0.995);
+                          let maxB = maxDeger < 0 ? Math.ceil(maxDeger * 0.995) : Math.ceil(maxDeger * 1.005);
+                          return minB === maxB ? (minB === 0 ? -100 : Math.floor(minB - Math.abs(minB * 0.05))) : minB;
+                        }, 
+                        (dataMax: number) => { 
+                          const minDeger = chartData.length ? Math.min(...chartData.map(d => d.deger)) : dataMax;
+                          const maxDeger = chartData.length ? Math.max(...chartData.map(d => d.deger)) : dataMax; 
+                          let minB = minDeger < 0 ? Math.floor(minDeger * 1.005) : Math.floor(minDeger * 0.995);
+                          let maxB = maxDeger < 0 ? Math.ceil(maxDeger * 0.995) : Math.ceil(maxDeger * 1.005);
+                          return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
+                        }
+                      ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                       <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                       <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
                       <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
@@ -804,7 +819,22 @@ const Analytics = () => {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                      <YAxis domain={[(dataMin: number) => { const minKar = chartData.length ? Math.min(...chartData.map(d => Number(d.kar))) : dataMin; return minKar < 0 ? Math.floor(minKar * 1.005) : Math.floor(minKar * 0.995); }, (dataMax: number) => { const maxKar = chartData.length ? Math.max(...chartData.map(d => Number(d.kar))) : dataMax; return maxKar < 0 ? Math.ceil(maxKar * 0.995) : Math.ceil(maxKar * 1.005); }]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis domain={[
+                        (dataMin: number) => { 
+                          const minKar = chartData.length ? Math.min(...chartData.map(d => Number(d.kar))) : dataMin; 
+                          const maxKar = chartData.length ? Math.max(...chartData.map(d => Number(d.kar))) : dataMin;
+                          let minB = minKar < 0 ? Math.floor(minKar * 1.005) : Math.floor(minKar * 0.995);
+                          let maxB = maxKar < 0 ? Math.ceil(maxKar * 0.995) : Math.ceil(maxKar * 1.005);
+                          return minB === maxB ? (minB === 0 ? -100 : Math.floor(minB - Math.abs(minB * 0.05))) : minB;
+                        }, 
+                        (dataMax: number) => { 
+                          const minKar = chartData.length ? Math.min(...chartData.map(d => Number(d.kar))) : dataMax;
+                          const maxKar = chartData.length ? Math.max(...chartData.map(d => Number(d.kar))) : dataMax; 
+                          let minB = minKar < 0 ? Math.floor(minKar * 1.005) : Math.floor(minKar * 0.995);
+                          let maxB = maxKar < 0 ? Math.ceil(maxKar * 0.995) : Math.ceil(maxKar * 1.005);
+                          return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
+                        }
+                      ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                       <Tooltip formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                       <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
                       <Area type="monotone" dataKey="kar" name="kar" stroke={latestProfit >= 0 ? "#10b981" : "#ef4444"} fill="url(#colorKar)" strokeWidth={2} />
@@ -866,7 +896,22 @@ const Analytics = () => {
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={20} />
-                        <YAxis domain={[(dataMin: number) => { const minVal = benchmarkData.length ? Math.min(...benchmarkData.map(d => Math.min(d.aktifDeger, d.qqqmDeger))) : dataMin; return minVal < 0 ? Math.floor(minVal * 1.005) : Math.floor(minVal * 0.995); }, (dataMax: number) => { const maxVal = benchmarkData.length ? Math.max(...benchmarkData.map(d => Math.max(d.aktifDeger, d.qqqmDeger))) : dataMax; return maxVal < 0 ? Math.ceil(maxVal * 0.995) : Math.ceil(maxVal * 1.005); }]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
+                        <YAxis domain={[
+                          (dataMin: number) => { 
+                            const minVal = benchmarkData.length ? Math.min(...benchmarkData.map(d => Math.min(d.aktifDeger, d.qqqmDeger))) : dataMin; 
+                            const maxVal = benchmarkData.length ? Math.max(...benchmarkData.map(d => Math.max(d.aktifDeger, d.qqqmDeger))) : dataMin;
+                            let minB = minVal < 0 ? Math.floor(minVal * 1.005) : Math.floor(minVal * 0.995);
+                            let maxB = maxVal < 0 ? Math.ceil(maxVal * 0.995) : Math.ceil(maxVal * 1.005);
+                            return minB === maxB ? (minB === 0 ? -100 : Math.floor(minB - Math.abs(minB * 0.05))) : minB;
+                          }, 
+                          (dataMax: number) => { 
+                            const minVal = benchmarkData.length ? Math.min(...benchmarkData.map(d => Math.min(d.aktifDeger, d.qqqmDeger))) : dataMax;
+                            const maxVal = benchmarkData.length ? Math.max(...benchmarkData.map(d => Math.max(d.aktifDeger, d.qqqmDeger))) : dataMax; 
+                            let minB = minVal < 0 ? Math.floor(minVal * 1.005) : Math.floor(minVal * 0.995);
+                            let maxB = maxVal < 0 ? Math.ceil(maxVal * 0.995) : Math.ceil(maxVal * 1.005);
+                            return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
+                          }
+                        ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                         <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM Benchmark' : 'Yatırılan Ana Para']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                         <Area type="monotone" dataKey="aktifDeger" name="aktifDeger" stroke="#3b82f6" fill="url(#colorAktif)" strokeWidth={2} isAnimationActive={false} />
                         <Line type="stepAfter" dataKey="aktifMaliyet" name="aktifMaliyet" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
