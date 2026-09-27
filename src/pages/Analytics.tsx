@@ -8,6 +8,7 @@ import { calculateComparison, fetchHistoricalPrices } from '../lib/comparison'
 import { fetchPrice } from '../lib/prices'
 import { getCurrentValue, getCostValue, isUSD, isPerformanceAsset } from '../lib/calculations'
 import { buildBenchmarkSeries } from '../lib/benchmark'
+import { buildPortfolioHistory } from '../lib/portfolioHistory'
 import { ComposedChart, AreaChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useLocation } from 'react-router-dom'
 import { AnalyticsSkeleton, SkeletonBox } from '../components/SkeletonLoaders'
@@ -140,8 +141,21 @@ const Analytics = () => {
       // Sadece veritabanındaki gerçek kayıtları çekiyoruz (normalizasyon/sentetik veri yok)
       const data = await fetchSnapshots(pidOrPids, Math.max(days, 365))
       
-      if (data && data.length > 0) {
-        setSnapshots(data)
+      const fromDate = getTodayDate(new Date(Date.now() - Math.max(days, 365) * 86400000))
+      const toDate = getTodayDate()
+      
+      const fluctuated = await buildPortfolioHistory({
+        assets: activeAssets,
+        livePrices: prices,
+        existingSnapshots: data,
+        fromDate,
+        toDate,
+        firstTxDate,
+        initialCost: initialTotalCost
+      })
+
+      if (fluctuated && fluctuated.length > 0) {
+        setSnapshots(fluctuated)
       } else {
         setSnapshots([])
       }

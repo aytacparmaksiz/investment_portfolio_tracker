@@ -475,3 +475,5 @@ export async function batchSaveSnapshots(portfolioId: string, snapshots: Snapsho
     console.warn('batchSaveSnapshots warning:', err)
   }
 }
+
+export const buildPortfolioHistory = reconstructPortfolioHistory;
