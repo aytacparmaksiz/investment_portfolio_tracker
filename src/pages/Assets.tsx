@@ -15,7 +15,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap'
 
 const Assets = () => {
   const { user } = useAuth()
-  const { refresh, prices, isHidden, portfolioId: contextPortfolioId } = usePortfolio()
+  const { refresh, prices, isHidden, portfolioId: contextPortfolioId, displayCurrency } = usePortfolio()
   const { success: showSuccess, error: showError } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -794,6 +794,15 @@ const Assets = () => {
 
   const formatCurrency = (val: number, type?: string, symbol?: string) => {
     if (isHidden) return '••••••'
+    if (displayCurrency === 'USD') {
+      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      let valInUsd = val
+      // If it's already USD, don't divide. (But note that eur or gbp would also be divided by usdRateLocal, which is slightly inaccurate for eur/gbp cross rates, but consistent with the rest of the simplified app math)
+      if (!isUSD(type || '', symbol)) {
+        valInUsd = val / usdRateLocal
+      }
+      return `$${Number(valInUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+    }
     if (type === 'eur_nakit' || (type === 'doviz' && symbol === 'EUR')) {
       return `€${Number(val).toLocaleString('de-DE', { maximumFractionDigits: 2 })}`
     }

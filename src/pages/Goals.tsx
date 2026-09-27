@@ -14,7 +14,7 @@ const MILESTONES = [100000, 250000, 500000, 750000, 1000000]
 
 const Goals = () => {
   const toast = useToast()
-  const { assets, prices, portfolioId, isHidden } = usePortfolio()
+  const { assets, prices, portfolioId, isHidden, displayCurrency } = usePortfolio()
   
   const [activeTab, setActiveTab] = useState<'hedefler' | 'fire'>('hedefler')
   
@@ -543,17 +543,17 @@ const Goals = () => {
       ========================================= */}
       {activeTab === 'hedefler' && (
         <>
-          <div className="responsive-grid-2" style={{ marginBottom: '16px' }}>
+          <div className="responsive-grid-2" style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
           {/* Gerçek Net Varlık Özet Kartı */}
-          <div style={{ ...card, marginBottom: '16px' }}>
+          <div style={{ ...card, flex: 1, minWidth: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div>
                 <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Gerçek Net Varlık (Net Worth)</p>
                 <h2 style={{ fontSize: '24px', fontWeight: '900', color: netWorthTRY >= 0 ? '#10b981' : 'var(--red)', letterSpacing: '-0.5px', marginTop: '2px' }}>
-                  {fc(netWorthTRY)}
+                  {displayCurrency === 'USD' ? fcUSD(netWorthUSD) : fc(netWorthTRY)}
                 </h2>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontWeight: '600' }}>
-                  {fcUSD(netWorthUSD)}
+                  {displayCurrency === 'USD' ? fc(netWorthTRY) : fcUSD(netWorthUSD)}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -574,26 +574,26 @@ const Goals = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Toplam Varlıklar</p>
-                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(totalAssetsTRY)}</p>
-                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{fcUSD(totalAssetsUSD)}</p>
+                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)' }}>{displayCurrency === 'USD' ? fcUSD(totalAssetsUSD) : fc(totalAssetsTRY)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{displayCurrency === 'USD' ? fc(totalAssetsTRY) : fcUSD(totalAssetsUSD)}</p>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Toplam Borçlar</p>
                 <p style={{ fontSize: '13px', fontWeight: '800', color: totalLiabilitiesTRY > 0 ? 'var(--red)' : 'var(--text-primary)' }}>
-                  {totalLiabilitiesTRY > 0 ? `-${fc(totalLiabilitiesTRY)}` : '₺0'}
+                  {totalLiabilitiesTRY > 0 ? `-${displayCurrency === 'USD' ? fcUSD(totalLiabilitiesUSD) : fc(totalLiabilitiesTRY)}` : (displayCurrency === 'USD' ? '$0' : '₺0')}
                 </p>
-                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{fcUSD(totalLiabilitiesUSD)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{displayCurrency === 'USD' ? fc(totalLiabilitiesTRY) : fcUSD(totalLiabilitiesUSD)}</p>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '10px', textAlign: 'center', border: '1px solid var(--accent)' }}>
                 <p style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>Net Varlık</p>
-                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent)' }}>{fc(netWorthTRY)}</p>
-                <p style={{ fontSize: '10px', color: 'var(--accent)' }}>{fcUSD(netWorthUSD)}</p>
+                <p style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent)' }}>{displayCurrency === 'USD' ? fcUSD(netWorthUSD) : fc(netWorthTRY)}</p>
+                <p style={{ fontSize: '10px', color: 'var(--accent)' }}>{displayCurrency === 'USD' ? fc(netWorthTRY) : fcUSD(netWorthUSD)}</p>
               </div>
             </div>
           </div>
 
           {/* Ana Hedef Tüpü */}
-          <div style={{ ...card, marginBottom: '16px' }}>
+          <div style={{ ...card, flex: 1, minWidth: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: '0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
               <p style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)' }}>$1M Hedef İlerlemesi (Net Varlık)</p>
               <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--green)' }}>%{isHidden ? '••' : progressPct.toFixed(1)}</p>
@@ -617,13 +617,13 @@ const Goals = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Net Varlık</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(netWorthTRY)}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(netWorthUSD)}</p>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{displayCurrency === 'USD' ? fcUSD(netWorthUSD) : fc(netWorthTRY)}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{displayCurrency === 'USD' ? fc(netWorthTRY) : fcUSD(netWorthUSD)}</p>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: '10px', padding: '12px' }}>
                 <p style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>Kalan</p>
-                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{fc(Math.max(goalTRY - netWorthTRY, 0))}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{fcUSD(Math.max((goalTRY - netWorthTRY) / usdRate, 0))}</p>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>{displayCurrency === 'USD' ? fcUSD(Math.max((goalTRY - netWorthTRY) / usdRate, 0)) : fc(Math.max(goalTRY - netWorthTRY, 0))}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{displayCurrency === 'USD' ? fc(Math.max(goalTRY - netWorthTRY, 0)) : fcUSD(Math.max((goalTRY - netWorthTRY) / usdRate, 0))}</p>
               </div>
             </div>
           </div>
@@ -987,7 +987,7 @@ const Goals = () => {
                   <ComposedChart data={chartData} barGap={-28} margin={{ top: 20, right: -10, left: -15, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis yAxisId="left" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
+                    <YAxis yAxisId="left" domain={[(dataMin: number) => dataMin < 0 ? Math.floor(dataMin * 1.005) : Math.floor(dataMin * 0.995), (dataMax: number) => dataMax < 0 ? Math.ceil(dataMax * 0.995) : Math.ceil(dataMax * 1.005)]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v/1000).toFixed(0)}K`} />
                     <YAxis yAxisId="right" orientation="right" domain={[0, 100]} hide={true} />
                     
                     <Tooltip 

@@ -19,6 +19,8 @@ interface PortfolioContextType {
   resetPortfolio: () => void
   isHidden: boolean
   setIsHidden: (hidden: boolean) => void
+  displayCurrency: 'TRY' | 'USD'
+  setDisplayCurrency: (currency: 'TRY' | 'USD') => void
 }
 
 const PortfolioContext = createContext<PortfolioContextType>({} as PortfolioContextType)
@@ -34,6 +36,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [allPortfolioIds, setAllPortfolioIds] = useState<string[]>([])
   const [hasFetched, setHasFetched] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
+  const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
 
   const hasFetchedRef = useRef(false)
   const isFetchingRef = useRef(false)
@@ -158,7 +161,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 }, [user])
 
   return (
-    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, resetPortfolio, isHidden, setIsHidden }}>
+    <PortfolioContext.Provider value={{ assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, resetPortfolio, isHidden, setIsHidden, displayCurrency, setDisplayCurrency }}>
       {children}
     </PortfolioContext.Provider>
   )

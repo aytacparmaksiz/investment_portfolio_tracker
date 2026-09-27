@@ -14,7 +14,7 @@ import { AnalyticsSkeleton, SkeletonBox } from '../components/SkeletonLoaders'
 
 const Analytics = () => {
   const { user } = useAuth()
-  const { assets, prices, loading, portfolioId, allPortfolioIds: ctxPortfolioIds, refresh, isHidden } = usePortfolio()
+  const { assets, prices, loading, portfolioId, allPortfolioIds: ctxPortfolioIds, refresh, isHidden, displayCurrency } = usePortfolio()
   const location = useLocation()
   const [snapshots, setSnapshots] = useState<any[]>([])
   
@@ -155,6 +155,10 @@ const Analytics = () => {
 
   const fc = (val: number) => {
     if (isHidden) return '••••••'
+    if (displayCurrency === 'USD') {
+      const usdRateLocal = prices['USDTRY=X'] || FALLBACK_USD_RATE
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val / usdRateLocal)
+    }
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val)
   }
 
@@ -728,7 +732,7 @@ const Analytics = () => {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                      <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis domain={[(dataMin: number) => dataMin < 0 ? Math.floor(dataMin * 1.005) : Math.floor(dataMin * 0.995), (dataMax: number) => dataMax < 0 ? Math.ceil(dataMax * 0.995) : Math.ceil(dataMax * 1.005)]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                       <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                       <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
                       <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
@@ -776,7 +780,7 @@ const Analytics = () => {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                      <YAxis tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis domain={[(dataMin: number) => dataMin < 0 ? Math.floor(dataMin * 1.005) : Math.floor(dataMin * 0.995), (dataMax: number) => dataMax < 0 ? Math.ceil(dataMax * 0.995) : Math.ceil(dataMax * 1.005)]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                       <Tooltip formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                       <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
                       <Area type="monotone" dataKey="kar" name="kar" stroke={latestProfit >= 0 ? "#10b981" : "#ef4444"} fill="url(#colorKar)" strokeWidth={2} />
@@ -838,7 +842,7 @@ const Analytics = () => {
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={20} />
-                        <YAxis domain={['auto', 'auto']} tick={{ fill: '#9ca3af', fontSize: 10, filter: isHidden ? 'blur(5px)' : 'none' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                        <YAxis domain={[(dataMin: number) => dataMin < 0 ? Math.floor(dataMin * 1.005) : Math.floor(dataMin * 0.995), (dataMax: number) => dataMax < 0 ? Math.ceil(dataMax * 0.995) : Math.ceil(dataMax * 1.005)]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
                         <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM Benchmark' : 'Yatırılan Ana Para']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
                         <Area type="monotone" dataKey="aktifDeger" name="aktifDeger" stroke="#3b82f6" fill="url(#colorAktif)" strokeWidth={2} isAnimationActive={false} />
                         <Line type="stepAfter" dataKey="aktifMaliyet" name="aktifMaliyet" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />

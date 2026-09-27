@@ -21,12 +21,11 @@ const ASSET_LABELS: Record<string, string> = {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth()
-  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, isHidden, setIsHidden } = usePortfolio()
+  const { assets, prices, loading, pricesLoading, lastUpdated, portfolioId, allPortfolioIds, refresh, isHidden, setIsHidden, displayCurrency, setDisplayCurrency } = usePortfolio()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const toast = useToast()
-  const [displayCurrency, setDisplayCurrency] = useState<'TRY' | 'USD'>('TRY')
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
@@ -209,20 +208,24 @@ const Dashboard = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{user.email}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border)', height: '36px', boxSizing: 'border-box' }}>
             <button onClick={() => setDisplayCurrency('TRY')}
-              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', height: '100%', background: displayCurrency === 'TRY' ? 'var(--accent)' : 'none', color: displayCurrency === 'TRY' ? 'white' : 'var(--text-secondary)' }}>
               ₺
             </button>
             <button onClick={() => setDisplayCurrency('USD')}
-              style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', height: '100%', background: displayCurrency === 'USD' ? 'var(--accent)' : 'none', color: displayCurrency === 'USD' ? 'white' : 'var(--text-secondary)' }}>
               $
             </button>
           </div>
           <button 
             onClick={toggleTheme} 
             style={{ 
-              padding: '8px', 
+              height: '36px',
+              width: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               background: 'var(--bg-card)', 
               border: '1px solid var(--border)', 
               borderRadius: '10px', 
@@ -237,19 +240,23 @@ const Dashboard = () => {
           <button 
             onClick={() => setIsHidden(!isHidden)} 
             style={{ 
-              padding: '8px 12px', 
+              height: '36px',
+              width: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               background: 'var(--bg-card)', 
               border: '1px solid var(--border)', 
               borderRadius: '10px', 
               cursor: 'pointer', 
-              fontSize: '13px', 
-              fontWeight: '600', 
+              fontSize: '16px', 
               color: 'var(--text-primary)' 
             }}
+            aria-label={isHidden ? "Göster" : "Gizle"}
           >
-            {isHidden ? '👁️ Göster' : '🔒 Gizle'}
+            {isHidden ? '👁️‍🗨️' : '👁️'}
           </button>
-          <button onClick={signOut} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', boxShadow: 'var(--shadow)' }}>
+          <button onClick={signOut} style={{ height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', boxShadow: 'var(--shadow)' }}>
             Çıkış
           </button>
         </div>
@@ -520,8 +527,8 @@ const Dashboard = () => {
                         <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>
                           {asset.symbol && <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{asset.symbol}</span>}
-                          {!isManual && asset.quantity ? ` · ${asset.quantity} adet` : ''}
-                          {hasPrice ? ` · ${isUSDAsset ? `$${(prices[asset.symbol + '_usd'] ?? (prices[asset.symbol] / usdRate)).toFixed(2)}` : fc(prices[asset.symbol])}` : ''}
+                          {!isManual && asset.quantity ? ` · ${isHidden ? '••••••' : asset.quantity} adet` : ''}
+                          {hasPrice ? ` · ${isHidden ? '••••••' : (isUSDAsset ? `$${(prices[asset.symbol + '_usd'] ?? (prices[asset.symbol] / usdRate)).toFixed(2)}` : fc(prices[asset.symbol]))}` : ''}
                         </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
