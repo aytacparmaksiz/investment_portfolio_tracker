@@ -97,16 +97,16 @@ export async function fetchCryptoPrice(symbol: string, usdtry: number, coingecko
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000)
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}USDT`, { signal: controller.signal })
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`, { signal: controller.signal })
     clearTimeout(timeoutId)
     if (res.ok) {
       const data = await res.json()
-      if (data?.lastPrice) {
-        const usd = Number(data.lastPrice)
+      if (data?.price) {
+        const usd = Number(data.price)
         const result = {
           try: usd * usdtry,
           usd,
-          dailyPct: data.priceChangePercent != null ? Number(data.priceChangePercent) : undefined
+          dailyPct: undefined
         }
         cryptoCache[sym] = result
         return result
@@ -276,6 +276,14 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
         prices[sym + '_usd'] = cryptoPrice.usd
         prices[rawSym + '_usd'] = cryptoPrice.usd
         prices[sym.toLowerCase() + '_usd'] = cryptoPrice.usd
+      } else if (asset.avg_cost) {
+        const usdCost = Number(asset.avg_cost)
+        if (!isNaN(usdCost) && usdCost > 0) {
+          setPrice(sym, usdCost * usdtry, 0)
+          prices[sym + '_usd'] = usdCost
+          prices[rawSym + '_usd'] = usdCost
+          prices[sym.toLowerCase() + '_usd'] = usdCost
+        }
       }
 
     } else if (asset.type === 'doviz') {
