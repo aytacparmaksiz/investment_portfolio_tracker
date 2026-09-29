@@ -66,7 +66,97 @@ export async function fetchCryptoPrice(symbol: string, usdtry: number, coingecko
   const cleanCoingeckoId = coingeckoId?.trim().toLowerCase()
   const id = cleanCoingeckoId || CRYPTO_IDS[sym]
 
-  // 1. CoinGecko
+  // 1. Binance 24hr Ticker (Fast, CEX cryptos, zero rate limits)
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2500)
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}USDT`, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.lastPrice) {
+        const usd = Number(data.lastPrice)
+        const dailyPct = data?.priceChangePercent != null && !isNaN(Number(data.priceChangePercent))
+          ? Number(data.priceChangePercent)
+          : undefined
+        const result = {
+          try: usd * usdtry,
+          usd,
+          dailyPct
+        }
+        cryptoCache[sym] = result
+        return result
+      }
+    }
+  } catch {
+    // devam et
+  }
+
+  // 2. DexScreener API (DEX tokens, meme coins, liquid staking tokens like P33, PHAR, Uniswap/Raydium/Pharaoh tokens)
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(sym)}`, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.pairs && data.pairs.length > 0) {
+        const exactMatches = data.pairs.filter((p: any) => p.baseToken?.symbol?.toUpperCase() === sym)
+        exactMatches.sort((a: any, b: any) => Number(b.liquidity?.usd || 0) - Number(a.liquidity?.usd || 0))
+        const bestPair = exactMatches[0] || data.pairs[0]
+        const priceUsd = Number(bestPair.priceUsd)
+        if (!isNaN(priceUsd) && priceUsd > 0) {
+          const dailyPct = bestPair.priceChange?.h24 != null && !isNaN(Number(bestPair.priceChange.h24))
+            ? Number(bestPair.priceChange.h24)
+            : undefined
+          const result = {
+            try: priceUsd * usdtry,
+            usd: priceUsd,
+            dailyPct
+          }
+          cryptoCache[sym] = result
+          return result
+        }
+      }
+    }
+  } catch {
+    // devam et
+  }
+
+  // 3. GeckoTerminal On-chain Pools API (CoinGecko DEX network backup)
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`https://api.geckoterminal.com/api/v2/search/pools?query=${encodeURIComponent(sym)}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' }
+    })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      const data = await res.json()
+      const pools = data?.data
+      if (Array.isArray(pools) && pools.length > 0) {
+        const first = pools[0]
+        const priceUsd = Number(first.attributes?.base_token_price_usd)
+        if (!isNaN(priceUsd) && priceUsd > 0) {
+          const dailyPct = first.attributes?.price_change_percentage?.h24 != null && !isNaN(Number(first.attributes.price_change_percentage.h24))
+            ? Number(first.attributes.price_change_percentage.h24)
+            : undefined
+          const result = {
+            try: priceUsd * usdtry,
+            usd: priceUsd,
+            dailyPct
+          }
+          cryptoCache[sym] = result
+          return result
+        }
+      }
+    }
+  } catch {
+    // devam et
+  }
+
+  // 4. CoinGecko Simple Price
   if (id) {
     try {
       const controller = new AbortController()
@@ -93,30 +183,7 @@ export async function fetchCryptoPrice(symbol: string, usdtry: number, coingecko
     }
   }
 
-  // 2. Binance
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000)
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`, { signal: controller.signal })
-    clearTimeout(timeoutId)
-    if (res.ok) {
-      const data = await res.json()
-      if (data?.price) {
-        const usd = Number(data.price)
-        const result = {
-          try: usd * usdtry,
-          usd,
-          dailyPct: undefined
-        }
-        cryptoCache[sym] = result
-        return result
-      }
-    }
-  } catch {
-    // devam et
-  }
-
-  // 3. Yahoo Finance
+  // 5. Yahoo Finance
   try {
     const detail = await fetchPriceDetails(`${sym}-USD`)
     if (detail && detail.price) {
@@ -133,7 +200,7 @@ export async function fetchCryptoPrice(symbol: string, usdtry: number, coingecko
     // devam et
   }
 
-  // 4. Cache veya son çare
+  // 6. Cache veya son çare
   if (cryptoCache[sym]) {
     return cryptoCache[sym]
   }

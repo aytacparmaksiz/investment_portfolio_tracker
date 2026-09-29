@@ -66,15 +66,57 @@ export const useAssetSearch = () => {
       try {
         if (type === 'kripto') {
           try {
-            const res = await fetch(`https://kumbaram-three.vercel.app/api/crypto-search?q=${encodeURIComponent(value)}`, { signal });
-            if (signal.aborted) return;
-            if (!res.ok) {
-              if (!signal.aborted) setSearchResults([]);
-              return;
+            let coins: any[] = [];
+            const searchUrls = [
+              `/api/crypto-search?q=${encodeURIComponent(value)}`,
+              `https://kumbaram-three.vercel.app/api/crypto-search?q=${encodeURIComponent(value)}`
+            ];
+
+            for (const url of searchUrls) {
+              try {
+                const res = await fetch(url, { signal });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data?.coins && data.coins.length > 0) {
+                    coins = data.coins;
+                    break;
+                  }
+                }
+              } catch {
+                // sonraki dene
+              }
             }
-            const data = await res.json();
+
+            // Eğer API sonuç vermezse doğrudan DexScreener araması yap
+            if (coins.length === 0) {
+              try {
+                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(value)}`, { signal });
+                if (dexRes.ok) {
+                  const dexData = await dexRes.json();
+                  if (dexData?.pairs && Array.isArray(dexData.pairs)) {
+                    const seen = new Set<string>();
+                    for (const pair of dexData.pairs) {
+                      const sym = pair.baseToken?.symbol?.toUpperCase();
+                      if (sym && !seen.has(sym)) {
+                        seen.add(sym);
+                        coins.push({
+                          symbol: sym,
+                          name: `${pair.baseToken?.name || sym} (${pair.dexId || 'DEX'})`,
+                          id: sym.toLowerCase(),
+                          type: 'CRYPTOCURRENCY'
+                        });
+                      }
+                      if (coins.length >= 8) break;
+                    }
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+
             if (!signal.aborted) {
-              setSearchResults(data.coins || []);
+              setSearchResults(coins);
             }
           } catch (err: any) {
             if (err?.name === 'AbortError' || signal.aborted) return;
