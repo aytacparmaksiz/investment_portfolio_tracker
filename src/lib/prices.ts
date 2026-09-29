@@ -59,21 +59,86 @@ export async function fetchPrice(symbol: string): Promise<number | null> {
   return details ? details.price : null
 }
 
-export async function fetchCryptoPrice(symbol: string, coingeckoId?: string): Promise<{ try: number; usd: number; dailyPct?: number } | null> {
-  try {
-    const cleanCoingeckoId = coingeckoId?.trim().toLowerCase()
-    const id = cleanCoingeckoId || CRYPTO_IDS[symbol.trim().toUpperCase()]
-    if (!id) return null
-    const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`)
-    const data = await res.json()
-    const tryPrice = data?.[id]?.try
-    const usdPrice = data?.[id]?.usd
-    const dailyPct = data?.[id]?.usd_24h_change != null ? Number(data[id].usd_24h_change) : undefined
-    if (!tryPrice || !usdPrice) return null
-    return { try: Number(tryPrice), usd: Number(usdPrice), dailyPct }
-  } catch {
-    return null
+const cryptoCache: Record<string, { try: number; usd: number; dailyPct?: number }> = {}
+
+export async function fetchCryptoPrice(symbol: string, usdtry: number, coingeckoId?: string): Promise<{ try: number; usd: number; dailyPct?: number } | null> {
+  const sym = symbol.trim().toUpperCase()
+  const cleanCoingeckoId = coingeckoId?.trim().toLowerCase()
+  const id = cleanCoingeckoId || CRYPTO_IDS[sym]
+
+  // 1. CoinGecko
+  if (id) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      const res = await fetch(`${COINGECKO}/simple/price?ids=${id}&vs_currencies=try,usd&include_24hr_change=true`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (res.ok) {
+        const data = await res.json()
+        const tryPrice = data?.[id]?.try
+        const usdPrice = data?.[id]?.usd
+        if (usdPrice) {
+          const usd = Number(usdPrice)
+          const result = {
+            try: tryPrice ? Number(tryPrice) : usd * usdtry,
+            usd,
+            dailyPct: data[id].usd_24h_change != null ? Number(data[id].usd_24h_change) : undefined
+          }
+          cryptoCache[sym] = result
+          return result
+        }
+      }
+    } catch {
+      // devam et
+    }
   }
+
+  // 2. Binance
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}USDT`, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.lastPrice) {
+        const usd = Number(data.lastPrice)
+        const result = {
+          try: usd * usdtry,
+          usd,
+          dailyPct: data.priceChangePercent != null ? Number(data.priceChangePercent) : undefined
+        }
+        cryptoCache[sym] = result
+        return result
+      }
+    }
+  } catch {
+    // devam et
+  }
+
+  // 3. Yahoo Finance
+  try {
+    const detail = await fetchPriceDetails(`${sym}-USD`)
+    if (detail && detail.price) {
+      const usd = detail.price
+      const result = {
+        try: usd * usdtry,
+        usd,
+        dailyPct: detail.dailyPct
+      }
+      cryptoCache[sym] = result
+      return result
+    }
+  } catch {
+    // devam et
+  }
+
+  // 4. Cache veya son çare
+  if (cryptoCache[sym]) {
+    return cryptoCache[sym]
+  }
+
+  return null
 }
 
 function formatDateTR(date: Date): string {
@@ -205,7 +270,7 @@ export async function fetchAllPrices(assets: any[]): Promise<Record<string, numb
       }
 
     } else if (asset.type === 'kripto') {
-      const cryptoPrice = await fetchCryptoPrice(sym, asset.coingecko_id)
+      const cryptoPrice = await fetchCryptoPrice(sym, usdtry, asset.coingecko_id)
       if (cryptoPrice) {
         setPrice(sym, cryptoPrice.try, cryptoPrice.dailyPct)
         prices[sym + '_usd'] = cryptoPrice.usd
