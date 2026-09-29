@@ -342,7 +342,7 @@ const Dashboard = () => {
                   isAnimationActive={false}>
                   {pieData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
+                <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px', color: 'var(--text-primary)', boxShadow: 'var(--shadow)' }} itemStyle={{ color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
             <div style={{ flex: 1 }}>
@@ -395,7 +395,7 @@ const Dashboard = () => {
                             onClick={(data: any) => setSelectedStrategy(data.name)} style={{ cursor: 'pointer', outline: 'none' }} isAnimationActive={false}>
                             {strategyData.map((_: any, i: number) => <Cell key={i} fill={['#f59e0b', '#10b981', '#6366f1', '#8b5cf6'][i % 4]} />)}
                           </Pie>
-                          <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
+                          <Tooltip formatter={(val: any, name: any) => [fc(val), name]} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-primary)' }} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div style={{ flex: 1 }}>

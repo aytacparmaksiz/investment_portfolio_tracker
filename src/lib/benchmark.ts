@@ -120,7 +120,73 @@ export function deduplicateSnapshots<T extends { snapshot_date: string; portfoli
     }
   }
 
-  return Array.from(dateMap.values()).sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  const rawSorted = Array.from(dateMap.values()).sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  return normalizeHistoricalAnomalies(rawSorted);
+}
+
+/**
+ * Kullanıcı tarafından belirtilen tarihsel geçiş dönemlerindeki yapay kırılmaları (örn. 15-17 Eylül varlık satışı / nakit geçişi ve 13-17 Temmuz verisizliği)
+ * yumuşatarak önceki ve sonraki günlerin referans değerleriyle dengeler.
+ */
+export function normalizeHistoricalAnomalies<T extends { snapshot_date: string; total_value?: number; total_cost?: number; performance_value?: number | null; performance_cost?: number | null }>(
+  snaps: T[]
+): T[] {
+  if (!snaps || snaps.length < 3) return snaps;
+  const copy = snaps.map(s => ({ ...s }));
+
+  function healWindow(startMMDD: string, endMMDD: string) {
+    const windowIndices: number[] = [];
+    for (let i = 0; i < copy.length; i++) {
+      const mmdd = copy[i].snapshot_date.slice(5); // 'MM-DD'
+      if (mmdd >= startMMDD && mmdd <= endMMDD) {
+        windowIndices.push(i);
+      }
+    }
+    if (windowIndices.length === 0) return;
+
+    const firstWinIdx = windowIndices[0];
+    const lastWinIdx = windowIndices[windowIndices.length - 1];
+
+    const prevIdx = firstWinIdx - 1;
+    const nextIdx = lastWinIdx + 1;
+
+    if (prevIdx < 0) return;
+    const prev = copy[prevIdx];
+    const next = nextIdx < copy.length ? copy[nextIdx] : prev;
+
+    for (const idx of windowIndices) {
+      const cur = copy[idx];
+      const prevVal = Number(prev.total_value || 0);
+      const curVal = Number(cur.total_value || 0);
+      const prevPerf = Number(prev.performance_value || prev.total_value || 0);
+      const curPerf = Number(cur.performance_value || cur.total_value || 0);
+
+      // Yapay ani düşüş kontrolü (> %5 düşüş)
+      const hasDrop = (prevVal > 0 && curVal < prevVal * 0.95) || 
+                      (prevPerf > 0 && curPerf < prevPerf * 0.95);
+
+      if (hasDrop) {
+        const totalSteps = (nextIdx < copy.length ? nextIdx : lastWinIdx + 1) - prevIdx;
+        const step = idx - prevIdx;
+        const factor = totalSteps > 0 ? step / totalSteps : 1;
+
+        const nextVal = Number(next.total_value || prev.total_value || 0);
+        const nextCost = Number(next.total_cost || prev.total_cost || 0);
+        const nextPerfVal = Number(next.performance_value || nextVal);
+        const nextPerfCost = Number(next.performance_cost || nextCost);
+
+        cur.total_value = Math.round(prevVal + (nextVal - prevVal) * factor) as any;
+        cur.total_cost = Math.round(Number(prev.total_cost || 0) + (nextCost - Number(prev.total_cost || 0)) * factor) as any;
+        cur.performance_value = Math.round(prevPerf + (nextPerfVal - prevPerf) * factor) as any;
+        cur.performance_cost = Math.round(Number(prev.performance_cost || prev.total_cost || 0) + (nextPerfCost - Number(prev.performance_cost || prev.total_cost || 0)) * factor) as any;
+      }
+    }
+  }
+
+  healWindow('07-13', '07-17');
+  healWindow('09-15', '09-17');
+
+  return copy;
 }
 
 export function buildBenchmarkSeries(
@@ -138,8 +204,8 @@ export function buildBenchmarkSeries(
     return { points: [], summary: null };
   }
 
-  // 1. Snapshot kayıtlarını tarihe göre tekilleştir
-  const sortedSnaps = deduplicateSnapshots(snapshots);
+  // 1. Snapshot kayıtlarını tarihe göre tekilleştir ve anomalileri düzelt
+  const sortedSnaps = normalizeHistoricalAnomalies(deduplicateSnapshots(snapshots));
   if (sortedSnaps.length === 0) {
     return { points: [], summary: null };
   }

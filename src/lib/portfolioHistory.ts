@@ -2,7 +2,7 @@ import type { Asset } from '../types/index.ts'
 import { FALLBACK_USD_RATE, getTodayDate } from './constants.ts'
 import { isPerformanceAsset, getCostValue, getCurrentValue } from './calculations.ts'
 import { fetchHistoricalPrices } from './comparison.ts'
-import { findClosestPrice, type SnapshotRecord } from './benchmark.ts'
+import { findClosestPrice, normalizeHistoricalAnomalies, type SnapshotRecord } from './benchmark.ts'
 import { supabase } from './supabase.ts'
 import type { SnapshotData } from './snapshot.ts'
 
@@ -446,8 +446,9 @@ export async function reconstructPortfolioHistory(options: ReconstructOptions): 
     }
   })
 
-  console.log(`[reconstructPortfolioHistory] Generated ${result.length} data points. Value range: ${Math.min(...result.map(r => Number(r.total_value)))} - ${Math.max(...result.map(r => Number(r.total_value)))}. Unique values: ${new Set(result.map(r => r.total_value)).size}`)
-  return result
+  const normalizedResult = normalizeHistoricalAnomalies(result)
+  console.log(`[reconstructPortfolioHistory] Generated ${normalizedResult.length} data points. Value range: ${Math.min(...normalizedResult.map(r => Number(r.total_value)))} - ${Math.max(...normalizedResult.map(r => Number(r.total_value)))}. Unique values: ${new Set(normalizedResult.map(r => r.total_value)).size}`)
+  return normalizedResult
 }
 
 /**

@@ -256,6 +256,20 @@ const Analytics = () => {
   const periodProfitPct = baseCost > 0 ? (profitDiff / baseCost) * 100 : 0
   const latestProfit = lastProfit
 
+  const formatTooltipDate = (label: string, payload?: any[]) => {
+    const raw = payload?.[0]?.payload?.rawDate
+    if (raw) {
+      const parts = raw.split('-')
+      if (parts.length === 3) {
+        const [y, m, d] = parts
+        const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
+        const mIdx = parseInt(m, 10) - 1
+        return `📅 ${parseInt(d, 10)} ${months[mIdx] || m} ${y}`
+      }
+    }
+    return `📅 ${label}`
+  }
+
   // Benchmark Grafiği verisi (tüm geçerli noktalar)
   const benchmarkData = chartData.filter(d => d.qqqmDeger > 0)
 
@@ -772,7 +786,13 @@ const Analytics = () => {
                           return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
                         }
                       ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                      <Tooltip 
+                        labelFormatter={formatTooltipDate}
+                        formatter={(val: any, name: any) => [fc(Number(val)), name === 'deger' ? 'Toplam Değer' : 'Yatırılan']} 
+                        contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '12px', color: 'var(--text-primary)', boxShadow: 'var(--shadow)' }} 
+                        itemStyle={{ color: 'var(--text-primary)' }}
+                        labelStyle={{ fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px' }}
+                      />
                       <Area type="monotone" dataKey="deger" name="deger" stroke="#6366f1" fill="url(#colorDeger)" strokeWidth={2} />
                       <Area type="stepAfter" dataKey="maliyet" name="maliyet" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
                     </AreaChart>
@@ -835,7 +855,13 @@ const Analytics = () => {
                           return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
                         }
                       ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                      <Tooltip 
+                        labelFormatter={formatTooltipDate}
+                        formatter={(val: any) => [fc(Number(val)), 'Net Kar/Zarar']} 
+                        contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '12px', color: 'var(--text-primary)', boxShadow: 'var(--shadow)' }} 
+                        itemStyle={{ color: 'var(--text-primary)' }}
+                        labelStyle={{ fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px' }}
+                      />
                       <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
                       <Area type="monotone" dataKey="kar" name="kar" stroke={latestProfit >= 0 ? "#10b981" : "#ef4444"} fill="url(#colorKar)" strokeWidth={2} />
                     </AreaChart>
@@ -912,7 +938,13 @@ const Analytics = () => {
                             return minB === maxB ? (maxB === 0 ? 100 : Math.ceil(maxB + Math.abs(maxB * 0.05))) : maxB;
                           }
                         ]} tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => isHidden ? '••••••' : `${(v / 1000).toFixed(0)}K`} />
-                        <Tooltip formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM Benchmark' : 'Yatırılan Ana Para']} contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '12px' }} />
+                        <Tooltip 
+                          labelFormatter={formatTooltipDate}
+                          formatter={(val: any, name: any) => [fc(Number(val)), name === 'aktifDeger' ? 'Aktif Portföy' : name === 'qqqmDeger' ? 'QQQM Benchmark' : 'Yatırılan Ana Para']} 
+                          contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '12px', color: 'var(--text-primary)', boxShadow: 'var(--shadow)' }} 
+                          itemStyle={{ color: 'var(--text-primary)' }}
+                          labelStyle={{ fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px' }}
+                        />
                         <Area type="monotone" dataKey="aktifDeger" name="aktifDeger" stroke="#3b82f6" fill="url(#colorAktif)" strokeWidth={2} isAnimationActive={false} />
                         <Line type="stepAfter" dataKey="aktifMaliyet" name="aktifMaliyet" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                         <Line type="monotone" dataKey="qqqmDeger" name="qqqmDeger" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
